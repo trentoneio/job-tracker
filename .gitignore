@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local data / secrets (never commit the live database or env overrides)
+data/
+.env
+*.db
+*.sqlite3
+
+# Docker build artifacts kept locally only
+.docker/
