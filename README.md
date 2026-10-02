@@ -11,8 +11,9 @@ and CSV export. The complete design lives in [PLAN.md](PLAN.md).
 
 ```bash
 python -m venv .venv
-# Windows (PowerShell):  .venv\Scripts\Activate.ps1
-# Git Bash / WSL:         source .venv/bin/activate
+# Windows (PowerShell):    .venv\Scripts\Activate.ps1
+# Windows (Git Bash):      source .venv/Scripts/activate
+# WSL / Linux / macOS:     source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
@@ -20,6 +21,17 @@ uvicorn app.main:app --reload
 Then open http://localhost:8000/healthz — it should return
 `{"status": "ok", "service": "job-tracker"}`. (Local dev serves on port 8000;
 the Docker setup below exposes 8090.)
+
+## Project status
+
+The data layer is in place (Session 1): SQLAlchemy models for
+`applications` and the append-only `status_events` history (`app/models.py`),
+a SQLite engine with WAL + foreign keys enabled (`app/db.py`, tables created at
+startup via a FastAPI lifespan), and repository functions that enforce all of
+PLAN.md §4's status-event rules (`app/repo.py`). Everything is covered by a
+temp-database test suite (`tests/test_data.py`). The API, forms, PDF uploads,
+dashboard and charts are the later sessions — see [PLAN.md](PLAN.md) §11 for
+the plan and [SESSION_LOG.md](SESSION_LOG.md) for what each session shipped.
 
 ## Run tests
 
