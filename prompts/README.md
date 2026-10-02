@@ -10,9 +10,16 @@ One prompt file per build session (`session-0.md`, `session-1.md`, …). Each on
 ## Session index
 | File | Scope |
 |---|---|
-| `session--1.md` | Initial architecture brief (verbatim original request; architecture-only session, no code) — see `PLAN.md` for the resulting design |
+| `session--1.md` | Initial architecture brief — verbatim original request, top of file (architecture-only session, no code; see `PLAN.md` for the resulting design). Appended below it: the Session -0.5 prompt (prompt-creation session; also no code) |
+| `session-0.md` | Repo scaffolding: app/ layout, pinned deps, /healthz, Dockerfile/compose skeleton, README stub |
+| `session-1.md` | Data layer: SQLAlchemy models, DB init (WAL), repository functions with event-append rules |
+| `session-2.md` | Application API + uploads: CRUD routes, multipart PDF validation, file download endpoint |
+| `session-3.md` | Dashboard UI core: base layout, HTMX filter bar, stat cards, waiting queue, table, forms, empty states |
+| `session-4.md` | Analytics charts: vendored ECharts, Sankey from status_events, pie of current statuses |
+| `session-5.md` | Exports & file polish: CSV endpoints wired to header buttons, original-filename downloads, README usage docs |
+| `session-6.md` | Pi deployment & hardening: final Dockerfile (non-root + healthcheck), compose, Pi guide in README, clean-room verification
 
-Build sessions 0–6 are specified in `PLAN.md` §11. Their self-contained prompt files will be written into this directory as they are scheduled.
+All build sessions 0–6 are now prompted; each file is fully self-contained — a fresh session starts by reading its own prompt only.
 
 ## Ground rules baked into every prompt
 - Do only that session's scope; never start later sessions' work.

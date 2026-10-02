@@ -32,3 +32,21 @@ Your job is to do the following:
 1. Create and initialize the git repo that will host this project. I want the project to be in "C:\Users\Trenton\coding-projects" (or /mnt/c/Users/Trenton/coding-projects from a WSL environment).
 2. Create directory in the repo for future session prompts. Put this prompt into the directory. You can consider yourself as session -1
 3. Create a plan to make this project a reality. Make a PLAN.md in the repo.
+
+---
+
+# Session -0.5 Prompt — Create prompts for all build sessions (verbatim)
+
+> Captured verbatim from the follow-up session request on 2026-07-09, appended here because its own file name would have been awkward under this directory's `session-N.md` integer convention.
+>
+> Role of this session: create self-contained prompt files `session-0.md` … `session-6.md`, one per build session in PLAN.md §11 — **no application code is written** (mirroring session -1's architecture-only role). Build sessions start at `session-0.md`.
+
+---
+
+You will be working on the project at C:\Users\Trenton\coding-projects\job-tracker. It DOES exist. Find it, do not create a new repo.
+
+Your only job is to create prompts for all future sessions that are defined in PLAN.md and put them in "prompts". The session-to-session plan already exists under the section called "session plan" in PLAN.md. Use C:\Users\Trenton\coding-projects\pricehawk\prompts as an example.
+
+Make sure this prompt is recorded in the repo's "prompts" directory, as such (if file naming becomes awkward because of that, appending this prompt to the end of session -1's markdown is fine).
+
+Do not forget to commit your changes.

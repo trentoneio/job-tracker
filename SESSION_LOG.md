@@ -14,3 +14,15 @@ Chronological log of sessions that have touched this repo. Each session ends by 
 **Open issues:** None blocking; see `PLAN.md` §13.
 
 **Notes for next session:** Start at Session 0 per the protocol in `PLAN.md` §11.
+
+## Session -0.5 — Create build-session prompts (2026-07-09)
+**Role:** Prompt creation only; no application code was written.
+
+**Changed:**
+- Wrote self-contained prompt files `prompts/session-0.md` … `prompts/session-6.md`, one per build session in PLAN.md §11, mirroring the pricehawk prompts format (start-here checks, where-we-are context, deliverables keyed to PLAN sections, hard rules, definition of done, commit order, finish protocol).
+- Appended this session's verbatim request to `prompts/session--1.md` (its own file name would have been awkward under the integer convention).
+- Updated the index in `prompts/README.md` with all build sessions.
+
+**Open issues:** None blocking; see PLAN.md §13 for known constraints and risks.
+
+**Notes for next session:** All prompts now exist. Start at **Session 0** — read `PLAN.md`, then `prompts/session-0.md`.
