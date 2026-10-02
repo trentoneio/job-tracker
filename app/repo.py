@@ -175,6 +175,9 @@ def get_status_events_for_filter(
     )))
 
 
+# Columns without a default that may never be NULL (§4 schema).
+_NON_NULLABLE_FIELDS = frozenset({"company", "job_title", "applied_on"})
+
 _UPDATABLE_FIELDS = frozenset({
     "company",
     "job_title",
@@ -203,8 +206,9 @@ def update_application(
     * ``updated_at`` is always bumped, even for non-status edits or no-ops.
 
     Returns the updated application, or ``None`` if the id does not exist.
-    Unknown field names raise ``TypeError``; invalid statuses raise
-    ``ValueError`` (both before any database change).
+    Unknown field names raise ``TypeError``; invalid statuses and attempts to
+    clear a required column (company/job_title/applied_on) raise
+    ``ValueError`` — all before any database change.
     """
     unknown = set(fields) - _UPDATABLE_FIELDS
     if unknown:
@@ -219,6 +223,12 @@ def update_application(
     application = session.get(Application, application_id)
     if application is None:
         return None
+
+    # Validate everything before mutating anything: a failed update must not
+    # leave partially-changed objects behind regardless of key order.
+    for name, value in fields.items():
+        if value is None and name in _NON_NULLABLE_FIELDS:
+            raise ValueError(f"field {name!r} cannot be cleared")
 
     previous_status = application.status
     for name, value in fields.items():
