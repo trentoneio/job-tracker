@@ -1,17 +1,27 @@
 """FastAPI application factory for the job tracker."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+
+from app.db import init_db
 
 
 def create_app() -> FastAPI:
     """Build and return the configured app.
 
-    Single place to hook in startup work: a lifespan context manager (DB init,
-    S1) goes on the ``FastAPI(...)`` call below, and static-file mounting
-    (dashboard assets, S3) goes at the bottom of this function.
+    Startup work runs in the lifespan below; static-file mounting (dashboard
+    assets, S3) goes at the bottom of this function.
     """
-    # S1: app = FastAPI(title=..., lifespan=lifespan) once DB init exists.
-    app = FastAPI(title="Job Application Tracker")
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        # Ensure the SQLite database (and its data directory) exists before
+        # serving any request (§7); idempotent across restarts.
+        init_db()
+        yield
+
+    app = FastAPI(title="Job Application Tracker", lifespan=lifespan)
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
