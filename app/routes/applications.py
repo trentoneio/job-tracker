@@ -22,8 +22,9 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app import config, repo, uploads
+from app import config, dashboard, repo, uploads
 from app.db import open_session
+from app.models import utc_now
 
 templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent.parent / "templates")
@@ -128,8 +129,36 @@ def index(
             date_from=date_from,
             date_to=date_to,
         )
+        # Same predicate, full event history — feeds the median-days card and
+        # (later, S4) the chart data.
+        events = repo.get_status_events_for_filter(
+            session,
+            company=company_value,
+            statuses=statuses,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+    today = utc_now().date()
+    waiting_rows = dashboard.waiting_queue(applications, today)
+    total = len(applications)
+    closed_count = sum(
+        1 for app in applications if app.status in dashboard.TERMINAL_STATUSES
+    )
+    stats = {
+        "total": total,
+        "waiting": len(waiting_rows),
+        "closed_rate": dashboard.format_percent(dashboard.closed_rate(total, closed_count)),
+        "median_days": dashboard.format_days(
+            dashboard.median_days_to_first_response(applications, events)
+        ),
+    }
 
     return templates.TemplateResponse(request, "index.html", {
+        # Dashboard widgets (§6 items 3–4, 7).
+        "today": today,
+        "waiting": waiting_rows,
+        "stats": stats,
         # Filter state so the re-rendered page keeps its selections.
         "selected_company": company_value or "",
         "selected_statuses": statuses,

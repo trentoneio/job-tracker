@@ -50,26 +50,84 @@
     </div>
   </form>
 
-  {% if applications %}
-    <h2>Applications</h2>
-    <table class="table">
-      <thead>
-        <tr><th>Company</th><th>Title</th><th>Applied</th><th>Status</th></tr>
-      </thead>
-      <tbody>
-        {% for application in applications %}
-          <tr>
-            <td><a href="/applications/{{ application.id }}">{{ application.company }}</a></td>
-            <td>{{ application.job_title }}</td>
-            <td>{{ application.applied_on.isoformat() }}</td>
-            <td><span class="badge" style="background: {{ status_colors.get(application.status, '#6b7280') }}">{{ application.status }}</span></td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% elif is_filtered %}
-    <p class="empty-state">Nothing matches these filters. <a href="/">Clear filters</a>.</p>
-  {% else %}
-    <p class="empty-state">No applications yet — <a href="/applications/new">add your first</a>.</p>
-  {% endif %}
+  {# Stat cards (§6 item 3) — computed over the exact filtered slice. #}
+  <section class="stat-cards" aria-label="Summary statistics for the current filter">
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.total }}</span>
+      <span class="stat-label">Total applications</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.waiting }}</span>
+      <span class="stat-label">Waiting on employer</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.closed_rate }}</span>
+      <span class="stat-label">Closed (terminal) rate</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{{ stats.median_days }}</span>
+      <span class="stat-label">Median days to first response</span>
+    </div>
+  </section>
+
+  {# Waiting queue — the headline widget (§6 item 4): who has been silent
+     longest. Rows open the detail page on click (see base.html). #}
+  <section class="panel" aria-labelledby="waiting-title">
+    <h2 id="waiting-title" class="section-title">Waiting on employer</h2>
+    {% if waiting %}
+      <table class="table">
+        <thead>
+          <tr><th>Company</th><th>Title</th><th>Status</th><th class="num">Days since applied</th></tr>
+        </thead>
+        <tbody>
+          {% for app in waiting %}
+            <tr data-href="/applications/{{ app.id }}" class="row-link">
+              <td>{{ app.company }}</td>
+              <td>{{ app.job_title }}</td>
+              <td><span class="badge" style="background: {{ status_colors.get(app.status, '#6b7280') }}">{{ app.status }}</span></td>
+              <td class="num">{{ (today - app.applied_on).days }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">Nothing waiting right now.</p>
+    {% endif %}
+  </section>
+
+  {# Everything in the current slice (§6 item 7). #}
+  <section class="panel" aria-labelledby="all-title">
+    <h2 id="all-title" class="section-title">All applications</h2>
+    {% if applications %}
+      <table class="table">
+        <thead>
+          <tr><th>Company</th><th>Title</th><th>Ref</th><th>Applied</th><th>Status</th><th class="num">Days since applied</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for app in applications %}
+            <tr data-href="/applications/{{ app.id }}" class="row-link">
+              <td>{{ app.company }}</td>
+              <td>{{ app.job_title }}</td>
+              <td>{{ app.reference_number or '—' }}</td>
+              <td>{{ app.applied_on.isoformat() }}</td>
+              <td><span class="badge" style="background: {{ status_colors.get(app.status, '#6b7280') }}">{{ app.status }}</span></td>
+              <td class="num">{{ (today - app.applied_on).days }}</td>
+              <td class="cell-links">
+                {% if app.resume_file_name %}<a href="/files/{{ app.id }}/resume">Resume</a>{% endif %}
+                {% if app.application_file_name %}<a href="/files/{{ app.id }}/application">PDF</a>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% elif is_filtered %}
+      <p class="empty-state">Nothing matches these filters. <a href="/">Clear filters</a>.</p>
+    {% else %}
+      <p class="empty-state">No applications yet — <a href="/applications/new">add your first</a>.</p>
+    {% endif %}
+  </section>
+
+  {# S4: the status-flow chart goes here, between this page's widgets. Its JSON
+     is embedded as <script type="application/json" id="status-events-data"> from
+     repo.get_status_events_for_filter (already fetched for the stat cards). #}
 {% endblock %}
