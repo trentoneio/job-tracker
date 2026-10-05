@@ -2,39 +2,129 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Job Application Tracker{% endblock %}</title>
+  {# HTMX is vendored under /static/vendor — no CDN or runtime internet dependency (§3). #}
+  <script src="/static/vendor/htmx.min.js"></script>
+  <script>
+    // Dashboard table rows open the detail page on click; clicks on links or
+    // buttons inside a row keep their normal behavior (§6 item 7). The listener
+    // lives on document, so it survives HTMX whole-page swaps and reaches new rows.
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!target || !target.closest) return;
+      var row = target.closest("tr[data-href]");
+      if (!row || target.closest("a, button")) return;
+      window.location.assign(row.getAttribute("data-href"));
+    });
+  </script>
   <style>
-    /* S2 placeholder styling — S3 replaces this with the real dashboard layout (§6). */
-    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 46rem; margin: 1.5rem auto; padding: 0 1rem; color: #1f2937; }
-    .site-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.25rem; }
-    h1 { font-size: 1.35rem; line-height: 1.4; }
-    h2 { font-size: 1.05rem; margin-top: 1.75rem; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f8fafc; color: #111827; line-height: 1.45; }
     a { color: #2563eb; text-decoration: none; }
     a:hover { text-decoration: underline; }
-    label { display: block; margin-top: .7rem; font-weight: 600; font-size: .95rem; }
-    input, select, textarea { width: 100%; box-sizing: border-box; padding: .45rem .55rem; margin-top: .2rem; font: inherit; color: inherit; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
-    input[type="checkbox"] { width: auto; }
-    .hint { font-weight: 400; font-size: .8rem; color: #6b7280; margin-top: .15rem; }
-    .field-error { color: #b91c1c; font-size: .85rem; margin-top: .2rem; }
-    .error-list { list-style: none; padding: .6rem 1rem; margin-bottom: 1rem; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: .9rem; }
-    .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .8rem; color: #fff; background: #6b7280; vertical-align: middle; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-    th, td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid #e5e7eb; font-size: .95rem; }
-    ol.timeline { list-style: none; padding-left: 0; margin-top: .5rem; }
-    ol.timeline li { padding: .35rem 0; border-bottom: 1px dashed #e5e7eb; font-size: .92rem; }
-    .actions { margin-top: 1.25rem; display: flex; gap: .75rem; align-items: center; }
-    button[type="submit"] { padding: .5rem 1rem; border: none; border-radius: 6px; background: #2563eb; color: #fff; font: inherit; cursor: pointer; }
-    .danger-zone { margin-top: 2.5rem; padding-top: 1rem; border-top: 2px solid #fecaca; }
+
+    /* Site header (§6 item 1) */
+    .site-header { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .8rem 1.5rem; background: #fff; border-bottom: 1px solid #e5e7eb; }
+    .site-header h1 { margin: 0; font-size: 1.2rem; white-space: nowrap; }
+    .site-header > h1 a { color: inherit; text-decoration: none; }
+    .header-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1rem; border-radius: 8px; border: 1px solid transparent; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+    .btn:hover { text-decoration: none; }
+    button[type="submit"], .btn-primary { background-color: #2563eb; color: #fff; border-color: #1d4ed8; }
+    button[type="submit"]:hover, .btn-primary:hover { background-color: #1d4ed8; }
+    .btn-ghost { background-color: #fff; color: #374151; border-color: #d1d5db; }
+    .btn-ghost:hover { background-color: #f9fafb; }
+    .btn-danger { background-color: #dc2626; color: #fff; border-color: #b91c1c; }
+    .btn-danger:hover { background-color: #b91c1c; }
+
+    /* Layout */
+    .content { max-width: 70rem; margin: 0 auto; padding: 1.25rem 1.5rem 3rem; }
+    h2 { font-size: 1.1rem; }
+    .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
+
+    /* Filter bar (§6 item 2) */
+    .filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .9rem 1.15rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
+    .filter-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+    .filter-label { font-size: .74rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }
+    .filter-bar select, .filter-bar input[type="date"] { padding: .42rem .55rem; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; background: #fff; color: inherit; width: auto; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .chip { position: relative; display: inline-flex; align-items: center; padding: .32rem .8rem; border: 1px solid #d1d5db; border-radius: 999px; background: #fff; font-size: .86rem; color: #374151; cursor: pointer; user-select: none; }
+    .chip input { position: absolute; opacity: 0; pointer-events: none; }
+    .chip:hover { border-color: #9ca3af; }
+    .chip:has(input:checked) { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; font-weight: 600; }
+    .chip:has(input:focus-visible) { outline: 2px solid #2563eb; outline-offset: 1px; }
+    .filter-actions { display: flex; align-items: center; gap: .6rem; margin-left: auto; }
+
+    /* Stat cards (§6 item 3) */
+    .stat-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .9rem; margin-bottom: 1.5rem; }
+    @media (max-width: 62rem) { .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: .85rem 1.05rem; }
+    .stat-value { font-size: 1.55rem; font-weight: 700; line-height: 1.2; }
+    .stat-label { display: block; margin-top: .25rem; font-size: .8rem; color: #6b7280; }
+
+    /* Tables */
+    .table { width: 100%; border-collapse: collapse; }
+    .table th { text-align: left; padding: .5rem .6rem; font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
+    .table td { padding: .55rem .6rem; border-bottom: 1px solid #f1f5f9; font-size: .93rem; vertical-align: top; }
+    .table tbody tr:last-child td { border-bottom: none; }
+    tr.row-link { cursor: pointer; }
+    tr.row-link:hover { background: #f8fafc; }
+
+    /* Badges (colors come from app/config.py STATUS_COLORS) */
+    .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; color: #fff; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+
+    /* Forms */
+    label { display: block; font-size: .86rem; font-weight: 500; margin-bottom: .3rem; color: #374151; }
+    input[type="text"], input[type="date"], input[type="url"], select, textarea { width: 100%; padding: .5rem .65rem; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; background: #fff; color: inherit; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid #93c5fd; outline-offset: 0; border-color: #2563eb; }
+    .hint { margin-top: .3rem; font-size: .8rem; color: #6b7280; }
+    textarea { min-height: 5.5rem; resize: vertical; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1.1rem; }
+    @media (max-width: 48rem) { .form-grid { grid-template-columns: 1fr; } }
+    .form-full { grid-column: 1 / -1; }
+    .error-list { margin: 0 0 1rem; padding-left: 1.2rem; color: #dc2626; font-size: .9rem; }
+    .field-error { display: block; margin-top: .3rem; color: #dc2626; font-size: .85rem; }
+
+    /* Detail page */
+    .detail-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
+    .detail-header h2 { margin: 0; font-size: 1.25rem; }
+    .meta { color: #6b7280; font-size: .92rem; }
     .meta p { margin: .3rem 0; }
+
+    /* Status timeline (append-only history, §4) */
+    ol.timeline { list-style: none; margin: .5rem 0 0; padding: 0; }
+    ol.timeline li { display: flex; align-items: center; gap: .5rem; padding: .5rem 0; border-bottom: 1px dashed #e5e7eb; font-size: .92rem; }
+    ol.timeline li:last-child { border-bottom: none; }
+    ol.timeline time { color: #6b7280; font-variant-numeric: tabular-nums; min-width: 4.2rem; }
+    .timeline-initial { color: #9ca3af; font-size: .85rem; }
+
+    /* Empty states */
+    .empty-state { padding: .9rem .25rem; margin: 0; color: #6b7280; font-size: .95rem; }
+
+    /* Danger zone */
+    .danger-zone { border: 1px solid #fecaca; border-top: 3px solid #dc2626; background: #fff5f5; padding: 1.1rem; margin-top: 1.6rem; border-radius: 10px; }
+    .actions { display: flex; gap: .7rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+    .checkbox-line { font-weight: normal; color: #374151; display: inline-flex; align-items: center; gap: .45rem; }
+    .checkbox-line input { width: auto; }
   </style>
 </head>
 <body>
   <header class="site-header">
     <h1><a href="/">Job Application Tracker</a></h1>
-    {% block header_actions %}
-      <p style="margin:0"><a href="/applications/new">+ New application</a></p>
-    {% endblock %}
+    <nav class="header-actions">
+      {% block header_actions %}
+        {# TODO(S5): add "Export CSV" (/api/export.csv) and "Export history" (/api/events.csv) links here, passing through the active filter query string. #}
+        <!-- S5: export links go in this nav, before the New application button. -->
+        <a class="btn btn-primary" href="/applications/new">+ New application</a>
+      {% endblock %}
+    </nav>
   </header>
-  {% block content %}{% endblock %}
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>

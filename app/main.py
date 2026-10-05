@@ -1,8 +1,10 @@
 """FastAPI application factory for the job tracker."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
 from app.routes.applications import router as applications_router
@@ -11,8 +13,8 @@ from app.routes.applications import router as applications_router
 def create_app() -> FastAPI:
     """Build and return the configured app.
 
-    Startup work runs in the lifespan below; static-file mounting (dashboard
-    assets, S3) goes at the bottom of this function.
+    Startup work runs in the lifespan below; static assets (vendored HTMX,
+    S3) are mounted at /static at the bottom of this function.
     """
 
     @asynccontextmanager
@@ -28,7 +30,10 @@ def create_app() -> FastAPI:
     def healthz() -> dict[str, str]:
         return {"status": "ok", "service": "job-tracker"}
 
-    # S3: app.mount("/static", StaticFiles(directory=...), name="static").
+    # Dashboard assets, served from disk — no CDN or runtime internet
+    # dependency (§3 LAN-only hosting).
+    static_dir = Path(__file__).resolve().parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.include_router(applications_router)
 
     return app
