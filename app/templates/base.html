@@ -215,8 +215,11 @@
     <h1><a href="/">Job Application Tracker</a></h1>
     <nav class="header-actions">
       {% block header_actions %}
-        {# TODO(S5): add "Export CSV" (/api/export.csv) and "Export history" (/api/events.csv) links here, passing through the active filter query string. #}
-        <!-- S5: export links go in this nav, before the New application button. -->
+        {# Export links carry the active filter query string from the dashboard
+           render (§5 "export what you're looking at"); pages that don't pass
+           them default to a full-dataset export. #}
+        <a class="btn btn-ghost" href="{{ export_csv_url | default('/api/export.csv') }}">Export CSV</a>
+        <a class="btn btn-ghost" href="{{ export_events_url | default('/api/events.csv') }}">Export history</a>
         <a class="btn btn-primary" href="/applications/new">+ New application</a>
       {% endblock %}
     </nav>

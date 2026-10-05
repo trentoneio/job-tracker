@@ -1,14 +1,10 @@
-"""Server-rendered application routes (PLAN.md §5, S2 scope).
+"""Server-rendered application routes (PLAN.md §5/§6).
 
 Create / detail / inline edit+status change / delete, plus multipart PDF
 uploads. Forms post to real endpoints and redirect after success (§5);
 validation problems re-render the same form with inline messages — there is
 no JSON API in this layer. New applications always start at ``received``;
 the create form has no status field (§4).
-
-The templates are deliberately minimal placeholders — S3 rebuilds them as
-the real dashboard layout (§6), including where the CSV/JSON export links
-will live in the header.
 
 Layering follows §4: request handlers only call repo functions through
 ``open_session()``; PDF filesystem work goes to ``app/uploads.py``.
@@ -18,6 +14,7 @@ import json
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
@@ -161,6 +158,22 @@ def index(
         ),
     }
 
+    # Header export links carry this exact filter query string, so
+    # "Export CSV" / "Export history" download what the dashboard shows (§5).
+    filter_params: list[tuple[str, str]] = []
+    if company_value:
+        filter_params.append(("company", company_value))
+    for status_name in statuses:
+        filter_params.append(("status", status_name))
+    if date_from is not None:
+        filter_params.append(("date_from", date_from.isoformat()))
+    if date_to is not None:
+        filter_params.append(("date_to", date_to.isoformat()))
+    filter_query = urlencode(filter_params)
+
+    def _export_url(path: str) -> str:
+        return f"{path}?{filter_query}" if filter_query else path
+
     return templates.TemplateResponse(request, "index.html", {
         # Dashboard widgets (§6 items 3–4, 7).
         "today": today,
@@ -172,6 +185,9 @@ def index(
         "date_from_str": date_from.isoformat() if date_from else "",
         "date_to_str": date_to.isoformat() if date_to else "",
         "is_filtered": bool(company_value or statuses or date_from or date_to),
+        # Header export links with the active filters (§5).
+        "export_csv_url": _export_url("/api/export.csv"),
+        "export_events_url": _export_url("/api/events.csv"),
         # Distinct companies within the current slice — same predicate as
         # every widget below (PLAN.md §6 item 2).
         "companies": sorted({app.company for app in applications}),
