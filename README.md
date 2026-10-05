@@ -63,9 +63,26 @@ re-renders the whole page via HTMX — or as a plain GET form without JavaScript
 The new/detail pages were rebuilt on the same layout, and the detail page gains
 the append-only status timeline.
 
+Session 4 adds the two remaining dashboard widgets (PLAN.md §6 items 5–6):
+**ECharts v6.1.0** vendored locally (`app/static/vendor/echarts.min.js`) and
+loaded from the base layout, plus a new pure-function module `app/analytics.py`
+that turns the filtered event slice into two JSON payloads — Sankey nodes in
+the §4.1 vocabulary order with links whose value is how many *applications*
+took each distinct transition (per-application dedupe), and pie slices of
+current-status counts with one-decimal percentages — embedded per render as
+`application/json` script tags inside new “Status flow” / “Current status”
+sections between the waiting queue and the all-applications table. A shared
+chart controller in `<head>` renders (and disposes) both charts on initial load
+and after every HTMX body swap, so filter changes re-chart with no stale state
+or stacked listeners, and slices without transitions/applications show friendly
+empty states. This session also set a repo-wide commit standard:
+`scripts/git-hooks/commit-msg` enforces the change type at the very end of
+every message (`Type:` footer as last non-blank line), enabled via
+`core.hooksPath` (one-time setup in the quickstart above).
+
 Everything is covered by temp-database test suites (`tests/test_data.py`,
-`tests/test_api.py`, `tests/test_dashboard.py`). Remaining: session 4 (Sankey
-funnel + status pie chart) and session 5 (CSV export). See
+`tests/test_api.py`, `tests/test_dashboard.py`, `tests/test_charts.py`).
+Remaining: session 5 (CSV export). See
 [PLAN.md](PLAN.md) §11 for the plan and [SESSION_LOG.md](SESSION_LOG.md) for
 what each session shipped.
 
