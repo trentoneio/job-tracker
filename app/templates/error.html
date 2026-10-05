@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Not found — Job Application Tracker{% endblock %}
+
+{% block content %}
+  {# Friendly 404 page (§5 polish): unknown application/file ids and routes. #}
+  <div class="panel">
+    <h2 class="section-title">Page not found</h2>
+    <p>{{ detail }}</p>
+    <a class="btn btn-ghost" href="/">&larr; Back to dashboard</a>
+  </div>
+{% endblock %}
