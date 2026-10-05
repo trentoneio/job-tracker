@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
 from app.routes.applications import router as applications_router
+from app.routes.exports import router as exports_router
 
 
 def create_app() -> FastAPI:
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.include_router(applications_router)
+    app.include_router(exports_router)
 
     return app
 
