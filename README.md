@@ -33,6 +33,44 @@ trailing `Type:` footer convention:
 git config core.hooksPath scripts/git-hooks
 ```
 
+## Using the app
+
+The dashboard (`GET /`) shows four stat cards, a waiting queue (who has been
+silent longest), status-flow and current-status charts, and an all-applications
+table — every widget computed over the same filtered slice.
+
+- **Add an application** via “+ New application” in the header: company and
+  job title are required; reference number, applied date (defaults to today),
+  posting URL, notes, plus optional resume and full-application PDFs. Both
+  PDFs must be real `.pdf` files of at most **15 MB each** — anything else is
+  rejected with an inline message before a single byte touches disk. New
+  applications always start in `received`.
+- **Track status over time** from the application’s detail page: pick a new
+  status (and edit any other field) and save. Every change appends exactly one
+  row to the append-only history, which the status timeline shows — including
+  when it first became received. Deleting an application removes its history
+  rows and both stored PDFs.
+- **Filter** by company, current status (multi-select chips), or applied-date
+  range; every widget reshapes around the same slice, with friendly empty
+  states when nothing matches. “Clear filters” returns to the full dataset.
+- **Export what you’re looking at**: the header’s “Export CSV” downloads the
+  applications as CSV and “Export history” downloads their full status
+  histories (one row per event). With no active filter both export the whole
+  dataset; with a filter they download exactly the slice on screen. Filenames
+  are timestamped (`applications_YYYYMMDD_HHMM.csv`, UTC).
+- **Download stored PDFs** from any table’s Resume/PDF links or the detail
+  page’s Documents section — served under the original filenames you uploaded
+  (stored as `<DATA_DIR>/uploads/<id>/<kind>.pdf`; re-uploading replaces in
+  place).
+
+Live state lives in `./data` at the repo root: `app.db` (SQLite) plus an
+`uploads/` tree of PDFs. To back up, copy that whole directory — with the
+container stopped if you want a guaranteed-consistent snapshot (§2, §7 of
+PLAN.md). The data directory is gitignored and bind-mounted into Docker at
+`/app/data`, so it survives rebuilds.
+
+(Deploying on a Raspberry Pi gets its own section when Session 6 ships.)
+
 ## Project status
 
 Session 1 delivered the data layer: SQLAlchemy models for `applications` and
@@ -80,9 +118,20 @@ empty states. This session also set a repo-wide commit standard:
 every message (`Type:` footer as last non-blank line), enabled via
 `core.hooksPath` (one-time setup in the quickstart above).
 
+Session 5 adds the data-out side (PLAN.md §5) and final polish: both CSV
+export endpoints (`GET /api/export.csv` for the applications, columns exactly
+per §5; `GET /api/events.csv` for one row per status event), each reusing the
+dashboard’s shared filter predicate so no filters exports the full dataset —
+and wired into the header as “Export CSV” / “Export history” buttons that
+carry the active filter query string. The polish pass covers friendly HTML
+404 pages for unknown application/file ids and routes, PDF download links in
+the waiting queue (matching the table and detail page), and the user-facing
+“Using the app” section above.
+
 Everything is covered by temp-database test suites (`tests/test_data.py`,
-`tests/test_api.py`, `tests/test_dashboard.py`, `tests/test_charts.py`).
-Remaining: session 5 (CSV export). See
+`tests/test_api.py`, `tests/test_dashboard.py`, `tests/test_charts.py`,
+`tests/test_export.py`).
+Remaining: session 6 (Docker / Pi deployment). See
 [PLAN.md](PLAN.md) §11 for the plan and [SESSION_LOG.md](SESSION_LOG.md) for
 what each session shipped.
 
