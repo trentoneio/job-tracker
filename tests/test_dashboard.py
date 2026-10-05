@@ -128,7 +128,7 @@ def _data_rows(page: str, start_marker: str, end_marker: str) -> list[list[str]]
 
 
 def _queue_rows(page: str) -> list[list[str]]:
-    """[company, title, status, days] per waiting-queue row."""
+    """[company, title, status, days, links-cell] per waiting-queue row."""
     return _data_rows(page, 'id="waiting-title"', 'id="all-title"')
 
 
