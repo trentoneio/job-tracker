@@ -15,6 +15,11 @@ python -m venv .venv
 # Windows (Git Bash):      source .venv/Scripts/activate
 # WSL / Linux / macOS:     source .venv/bin/activate
 pip install -r requirements.txt
+# Point live state at ./data in the repo. Without it, DATA_DIR defaults to
+# /app/data — fine inside Docker, but on a local Windows machine Python
+# resolves that against your system drive (e.g. C:\app\data), not the repo.
+set DATA_DIR=./data              # Git Bash / WSL / macOS
+$env:DATA_DIR = "./data"         # PowerShell
 uvicorn app.main:app --reload
 ```
 
@@ -24,14 +29,28 @@ the Docker setup below exposes 8090.)
 
 ## Project status
 
-The data layer is in place (Session 1): SQLAlchemy models for
-`applications` and the append-only `status_events` history (`app/models.py`),
-a SQLite engine with WAL + foreign keys enabled (`app/db.py`, tables created at
-startup via a FastAPI lifespan), and repository functions that enforce all of
-PLAN.md §4's status-event rules (`app/repo.py`). Everything is covered by a
-temp-database test suite (`tests/test_data.py`). The API, forms, PDF uploads,
-dashboard and charts are the later sessions — see [PLAN.md](PLAN.md) §11 for
-the plan and [SESSION_LOG.md](SESSION_LOG.md) for what each session shipped.
+Session 1 delivered the data layer: SQLAlchemy models for `applications` and
+the append-only `status_events` history (`app/models.py`), a SQLite engine
+with WAL + foreign keys enabled (`app/db.py`, tables created at startup via a
+FastAPI lifespan), and repository functions that enforce all of PLAN.md §4's
+status-event rules (`app/repo.py`).
+
+Session 2 adds the application API: server-rendered create/detail/update/
+delete pages with multipart PDF uploads for resume + full application
+(`app/routes/applications.py`, minimal placeholder templates in
+`app/templates/` that Session 3 will rebuild as the dashboard), upload
+validation and storage under `<DATA_DIR>/uploads/<id>/<kind>.pdf`
+(`app/uploads.py`) — extension, magic bytes and a 15 MB cap are all checked
+before anything touches disk — plus PDF downloads that serve stored files
+under their original names. Every status change appends exactly one
+`status_events` row; deleting an application removes its history rows and
+both stored files.
+
+Everything is covered by temp-database test suites (`tests/test_data.py`,
+`tests/test_api.py`). The dashboard layout, charts, waiting queue, filters,
+CSV/JSON export and static assets are the later sessions — see
+[PLAN.md](PLAN.md) §11 for the plan and [SESSION_LOG.md](SESSION_LOG.md) for
+what each session shipped.
 
 ## Run tests
 
