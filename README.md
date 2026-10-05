@@ -46,9 +46,20 @@ under their original names. Every status change appends exactly one
 `status_events` row; deleting an application removes its history rows and
 both stored files.
 
+Session 3 builds the dashboard on top of that (PLAN.md §6): a shared base layout
+with header (`app/templates/base.html`) and HTMX vendored under
+`app/static/vendor/`, so no runtime internet is needed. The index page has four
+stat cards computed by pure functions in `app/dashboard.py` over the filtered
+slice (total, waiting count, closed rate, median days to first response), a
+waiting queue sorted most-days-elapsed-first, and an all-applications table with
+row-click navigation; a filter bar (company / status chips / applied-date range)
+re-renders the whole page via HTMX — or as a plain GET form without JavaScript.
+The new/detail pages were rebuilt on the same layout, and the detail page gains
+the append-only status timeline.
+
 Everything is covered by temp-database test suites (`tests/test_data.py`,
-`tests/test_api.py`). The dashboard layout, charts, waiting queue, filters,
-CSV/JSON export and static assets are the later sessions — see
+`tests/test_api.py`, `tests/test_dashboard.py`). Remaining: session 4 (Sankey
+funnel + status pie chart) and session 5 (CSV export). See
 [PLAN.md](PLAN.md) §11 for the plan and [SESSION_LOG.md](SESSION_LOG.md) for
 what each session shipped.
 
