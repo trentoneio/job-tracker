@@ -4,8 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Job Application Tracker{% endblock %}</title>
-  {# HTMX is vendored under /static/vendor — no CDN or runtime internet dependency (§3). #}
+  {# HTMX and ECharts are vendored under /static/vendor — no CDN or runtime
+     internet dependency (§3). ECharts renders the dashboard's Sankey and pie
+     charts client-side from JSON embedded by each dashboard render (§6 items
+     5–6); it is loaded here on every page so that always holds. #}
   <script src="/static/vendor/htmx.min.js"></script>
+  <script src="/static/vendor/echarts.min.js"></script>
   <script>
     // Dashboard table rows open the detail page on click; clicks on links or
     // buttons inside a row keep their normal behavior (§6 item 7). The listener
