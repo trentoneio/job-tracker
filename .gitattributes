@@ -1,0 +1,3 @@
+# Shell scripts must keep LF endings even with core.autocrlf=true, or the
+# commit-msg hook in this directory cannot run under Git Bash / MSYS2 sh.
+scripts/git-hooks/* text eol=lf

@@ -1,0 +1,26 @@
+#!/bin/sh
+# job-tracker commit-message standard (PLAN.md §10), machine-enforced: the
+# change type goes at the END of every commit message — the last non-blank
+# line must be exactly one of
+#   Type: feature | fix | refactor | docs | chore | test | perf
+# (see 9c10ca9 for the canonical shape; a Type line before the body, as in
+# older commits like ae1331a, is rejected).
+#
+# Enable per clone with:   git config core.hooksPath scripts/git-hooks
+# Escape hatch for tooling/merges that can't comply:  git commit --no-verify
+
+msg_file="$1"
+
+last_line=$(tr -d '\r' < "$msg_file" | grep -v '^[[:space:]]*$' | tail -n 1)
+
+case $last_line in
+  "Type: feature"|"Type: fix"|"Type: refactor"|"Type: docs"| \
+  "Type: chore"|"Type: test"|"Type: perf")
+    exit 0
+    ;;
+esac
+
+echo "Commit message rejected (PLAN.md §10): the last non-blank line must be exactly one of" >&2
+echo "  Type: feature | fix | refactor | docs | chore | test | perf" >&2
+echo "(the change type goes at the END of the message, after a blank line — see git log 9c10ca9)" >&2
+exit 1
