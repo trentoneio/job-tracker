@@ -27,6 +27,12 @@ Then open http://localhost:8000/healthz — it should return
 `{"status": "ok", "service": "job-tracker"}`. (Local dev serves on port 8000;
 the Docker setup below exposes 8090.)
 
+One-time per clone — enable the commit-message hook that enforces PLAN §10's
+trailing `Type:` footer convention:
+```
+git config core.hooksPath scripts/git-hooks
+```
+
 ## Project status
 
 Session 1 delivered the data layer: SQLAlchemy models for `applications` and

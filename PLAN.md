@@ -180,7 +180,11 @@ services:
 
 Type: feature | fix | refactor | docs | chore | test | perf
 ```
-The trailing `Type:` footer is **mandatory** on every commit (documents documentation vs new feature vs bug fix, etc.).
+The trailing `Type:` footer is **mandatory** on every commit (documents documentation vs new feature vs bug fix, etc.), and the type must be the last non-blank line of the message. This is machine-enforced by `scripts/git-hooks/commit-msg` (CRLF-tolerant POSIX sh); enable it per clone with:
+```
+git config core.hooksPath scripts/git-hooks
+```
+(`.gitattributes` pins LF endings for the hook itself so it runs under Git Bash despite `core.autocrlf=true`; `--no-verify` remains the escape hatch where tooling can't comply.)
 - Work directly on `main` (solo project); short-lived branches only if a change gets risky.
 - `.gitignore` already established: live data (`data/`, `*.db`), env overrides, Python/Docker build artifacts never enter the repo.
 
