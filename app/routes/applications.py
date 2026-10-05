@@ -18,7 +18,7 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app import config, repo, uploads
@@ -317,6 +317,28 @@ async def update_application(
         )
 
     return RedirectResponse(f"/applications/{application_id}", status_code=303)
+
+
+@router.get("/files/{application_id}/{kind}")
+def download_file(application_id: int, kind: str):
+    """Stream one stored PDF back to the browser (§5).
+
+    The file is served with its original upload name (kept in the database,
+    §7). Unknown application, unknown kind, or a missing on-disk file all 404.
+    """
+    if kind not in uploads.KINDS:
+        raise HTTPException(status_code=404, detail="File not found")
+    with open_session() as session:
+        application = repo.get_application(session, application_id)
+        if application is None:
+            raise HTTPException(status_code=404, detail="Application not found")
+        file_name = getattr(application, f"{kind}_file_name")
+    if file_name is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    path = uploads.stored_path(kind, application_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path, media_type="application/pdf", filename=file_name)
 
 
 @router.post("/applications/{application_id}/delete")
