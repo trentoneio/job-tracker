@@ -95,6 +95,20 @@
     {% endif %}
   </section>
 
+  {# Status flow (§6 item 5): where each cohort in the slice went, from
+     status_events. The payload is embedded further down; the chart controller
+     in base.html renders it into #sankey-chart and re-renders on every swap. #}
+  <section class="panel" aria-labelledby="sankey-title">
+    <h2 id="sankey-title" class="section-title">Status flow</h2>
+    <div id="sankey-chart" class="chart"></div>
+  </section>
+
+  {# Current status distribution for the slice (§6 item 6). #}
+  <section class="panel" aria-labelledby="pie-title">
+    <h2 id="pie-title" class="section-title">Current status</h2>
+    <div id="pie-chart" class="chart"></div>
+  </section>
+
   {# Everything in the current slice (§6 item 7). #}
   <section class="panel" aria-labelledby="all-title">
     <h2 id="all-title" class="section-title">All applications</h2>
@@ -127,7 +141,9 @@
     {% endif %}
   </section>
 
-  {# S4: the status-flow chart goes here, between this page's widgets. Its JSON
-     is embedded as <script type="application/json" id="status-events-data"> from
-     repo.get_status_events_for_filter (already fetched for the stat cards). #}
+  {# Chart payloads for the two sections above (§6 items 5–6), one per render.
+     Only fixed-vocabulary status names and numbers are ever embedded, so no
+     HTML escaping is needed inside the script tags. #}
+  <script type="application/json" id="sankey-data">{{ sankey_json | safe }}</script>
+  <script type="application/json" id="pie-data">{{ pie_json | safe }}</script>
 {% endblock %}

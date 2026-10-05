@@ -14,6 +14,7 @@ Layering follows §4: request handlers only call repo functions through
 ``open_session()``; PDF filesystem work goes to ``app/uploads.py``.
 """
 
+import json
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
@@ -22,7 +23,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app import config, dashboard, repo, uploads
+from app import analytics, config, dashboard, repo, uploads
 from app.db import open_session
 from app.models import utc_now
 
@@ -132,7 +133,7 @@ def index(
             date_to=date_to,
         )
         # Same predicate, full event history — feeds the median-days card and
-        # (later, S4) the chart data.
+        # the Sankey payload below (§6 item 5).
         events = repo.get_status_events_for_filter(
             session,
             company=company_value,
@@ -142,6 +143,10 @@ def index(
         )
 
     today = utc_now().date()
+    # Chart payloads for the filtered slice (§6 items 5–6), serialized once so
+    # the template can embed them verbatim inside <script> tags.
+    sankey_payload = analytics.sankey_payload(events)
+    pie_payload = analytics.pie_payload(applications)
     waiting_rows = dashboard.waiting_queue(applications, today)
     total = len(applications)
     closed_count = sum(
@@ -173,6 +178,10 @@ def index(
         "statuses": config.STATUSES,
         "status_colors": config.STATUS_COLORS,
         "applications": applications,
+        # Compact JSON strings; contents are fixed-vocabulary status names and
+        # numbers only, so they need no escaping inside script tags.
+        "sankey_json": json.dumps(sankey_payload),
+        "pie_json": json.dumps(pie_payload),
     })
 
 

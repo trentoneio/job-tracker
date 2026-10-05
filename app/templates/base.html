@@ -10,6 +10,94 @@
      5–6); it is loaded here on every page so that always holds. #}
   <script src="/static/vendor/htmx.min.js"></script>
   <script src="/static/vendor/echarts.min.js"></script>
+
+  {# Chart controller (§6 items 5–6). Registered once on document — it lives in
+     the head, so HTMX body swaps never re-run or stack it. Each dashboard render
+     embeds its payloads as JSON script tags; on initial load (DOMContentLoaded)
+     and after every HTMX swap (htmx:afterSwap) we dispose any previous chart
+     instances and re-render from the fresh data, so repeated filter submits
+     never duplicate canvases or show stale flows. Pages without charts no-op #}
+  <script>
+    (function () {
+      var sankeyChart = null;
+      var pieChart = null;
+
+      function dispose(chart) {
+        if (chart && !chart.isDisposed()) chart.dispose();
+      }
+
+      function readPayload(tagId) {
+        var tag = document.getElementById(tagId);
+        if (!tag || !tag.textContent.trim()) return null;
+        try {
+          return JSON.parse(tag.textContent);
+        } catch (err) {
+          return null; // corrupt payload → treat as empty, never throw
+        }
+      }
+
+      function showEmpty(element, message) {
+        element.innerHTML = "<p class=\"empty-state\">" + message + "</p>";
+      }
+
+      function renderSankey(element, payload) {
+        if (!payload || !payload.links.length) {
+          // No transitions in the slice (e.g. every app is still `received`)
+          showEmpty(element, "No status changes yet.");
+          return;
+        }
+        sankeyChart = echarts.init(element);
+        sankeyChart.setOption({
+          tooltip: {},
+          series: [{
+            type: "sankey",
+            data: payload.nodes,
+            links: payload.links,
+            emphasis: { focus: "adjacency" },
+            lineStyle: { color: "gradient", curveness: 0.5 }
+          }]
+        });
+      }
+
+      function renderPie(element, payload) {
+        if (!payload || !payload.slices.length) {
+          showEmpty(element, "No data.");
+          return;
+        }
+        pieChart = echarts.init(element);
+        pieChart.setOption({
+          tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+          series: [{
+            type: "pie",
+            radius: ["38%", "68%"],
+            data: payload.slices.map(function (slice) {
+              return { name: slice.status, value: slice.count };
+            }),
+            label: { formatter: "{b}: {c} ({d}%)" }
+          }]
+        });
+      }
+
+      function renderCharts() {
+        // The swapped-in body (if any) is already in the DOM when this runs.
+        dispose(sankeyChart); sankeyChart = null;
+        dispose(pieChart); pieChart = null;
+        var sankeyEl = document.getElementById("sankey-chart");
+        if (sankeyEl) renderSankey(sankeyEl, readPayload("sankey-data"));
+        var pieEl = document.getElementById("pie-chart");
+        if (pieEl) renderPie(pieEl, readPayload("pie-data"));
+      }
+
+      function resizeCharts() {
+        if (sankeyChart && !sankeyChart.isDisposed()) sankeyChart.resize();
+        if (pieChart && !pieChart.isDisposed()) pieChart.resize();
+      }
+
+      document.addEventListener("htmx:afterSwap", renderCharts);
+      document.addEventListener("DOMContentLoaded", renderCharts);
+      window.addEventListener("resize", resizeCharts);
+    })();
+  </script>
   <script>
     // Dashboard table rows open the detail page on click; clicks on links or
     // buttons inside a row keep their normal behavior (§6 item 7). The listener
@@ -107,6 +195,10 @@
     ol.timeline li:last-child { border-bottom: none; }
     ol.timeline time { color: #6b7280; font-variant-numeric: tabular-nums; min-width: 4.2rem; }
     .timeline-initial { color: #9ca3af; font-size: .85rem; }
+
+    /* Charts (§6 items 5–6): fixed heights give ECharts a concrete canvas size.
+       The head controller renders into these and shows empty-state text inside */
+    .chart { height: 21rem; }
 
     /* Empty states */
     .empty-state { padding: .9rem .25rem; margin: 0; color: #6b7280; font-size: .95rem; }
