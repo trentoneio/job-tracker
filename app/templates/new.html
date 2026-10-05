@@ -1,45 +1,74 @@
 {% extends "base.html" %}
+
 {% block title %}New application — Job Application Tracker{% endblock %}
+
+{% block header_actions %}
+  <a class="btn btn-ghost" href="/">&larr; Dashboard</a>
+{% endblock %}
+
 {% block content %}
-<h1>New application</h1>
-{# New applications always start at 'received' (§4) — no status field here. #}
+  {# New applications always start at 'received' (§4) — no status field here. #}
+  <h1>New application</h1>
 
-{% if errors %}
-  <ul class="error-list">
-    {% for message in errors.values() %}<li>{{ message }}</li>{% endfor %}
-  </ul>
-{% endif %}
+  {% if errors %}
+    <ul class="error-list">
+      {% for message in errors.values() %}<li>{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
 
-<form method="post" action="/applications/new" enctype="multipart/form-data">
-  <label for="company">Company *</label>
-  <input id="company" name="company" value="{{ values.get('company', '') }}">
-  {% if errors.company %}<p class="field-error">{{ errors.company }}</p>{% endif %}
+  <div class="panel">
+    <form method="post" action="/applications/new" enctype="multipart/form-data">
+      <div class="form-grid">
+        <div>
+          <label for="company">Company *</label>
+          <input id="company" name="company" type="text" value="{{ values.get('company', '') }}">
+          {% if errors.company %}<p class="field-error">{{ errors.company }}</p>{% endif %}
+        </div>
 
-  <label for="job_title">Job title *</label>
-  <input id="job_title" name="job_title" value="{{ values.get('job_title', '') }}">
-  {% if errors.job_title %}<p class="field-error">{{ errors.job_title }}</p>{% endif %}
+        <div>
+          <label for="job_title">Job title *</label>
+          <input id="job_title" name="job_title" type="text" value="{{ values.get('job_title', '') }}">
+          {% if errors.job_title %}<p class="field-error">{{ errors.job_title }}</p>{% endif %}
+        </div>
 
-  <label for="reference_number">Reference number</label>
-  <input id="reference_number" name="reference_number" value="{{ values.get('reference_number', '') }}">
+        <div>
+          <label for="reference_number">Reference number</label>
+          <input id="reference_number" name="reference_number" type="text" value="{{ values.get('reference_number', '') }}">
+        </div>
 
-  <label for="applied_on">Applied on *</label>
-  <input id="applied_on" name="applied_on" type="date" value="{{ values.get('applied_on', '') }}">
-  {% if errors.applied_on %}<p class="field-error">{{ errors.applied_on }}</p>{% endif %}
+        <div>
+          <label for="applied_on">Applied on *</label>
+          <input id="applied_on" name="applied_on" type="date" value="{{ values.get('applied_on', '') }}">
+          {% if errors.applied_on %}<p class="field-error">{{ errors.applied_on }}</p>{% endif %}
+        </div>
 
-  <label for="job_posting_url">Job posting URL</label>
-  <input id="job_posting_url" name="job_posting_url" type="url" value="{{ values.get('job_posting_url', '') }}">
+        <div class="form-full">
+          <label for="job_posting_url">Job posting URL</label>
+          <input id="job_posting_url" name="job_posting_url" type="url" value="{{ values.get('job_posting_url', '') }}">
+        </div>
 
-  <label for="notes">Notes</label>
-  <textarea id="notes" name="notes" rows="4">{{ values.get('notes', '') }}</textarea>
+        <div class="form-full">
+          <label for="notes">Notes</label>
+          <textarea id="notes" name="notes" rows="4">{{ values.get('notes', '') }}</textarea>
+        </div>
 
-  <label for="resume_pdf">Resume (PDF, max {{ max_upload_mb }} MB)</label>
-  <input id="resume_pdf" name="resume_pdf" type="file" accept=".pdf">
-  {% if errors.resume_pdf %}<p class="field-error">{{ errors.resume_pdf }}</p>{% endif %}
+        <div class="form-full">
+          <label for="resume_pdf">Resume (PDF, max {{ max_upload_mb }} MB)</label>
+          <input id="resume_pdf" name="resume_pdf" type="file" accept=".pdf">
+          {% if errors.resume_pdf %}<p class="field-error">{{ errors.resume_pdf }}</p>{% endif %}
+        </div>
 
-  <label for="application_pdf">Application / cover letter (PDF, max {{ max_upload_mb }} MB)</label>
-  <input id="application_pdf" name="application_pdf" type="file" accept=".pdf">
-  {% if errors.application_pdf %}<p class="field-error">{{ errors.application_pdf }}</p>{% endif %}
+        <div class="form-full">
+          <label for="application_pdf">Application / cover letter (PDF, max {{ max_upload_mb }} MB)</label>
+          <input id="application_pdf" name="application_pdf" type="file" accept=".pdf">
+          {% if errors.application_pdf %}<p class="field-error">{{ errors.application_pdf }}</p>{% endif %}
+        </div>
+      </div>
 
-  <div class="actions"><button type="submit">Create application</button></div>
-</form>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Create application</button>
+        <a class="btn btn-ghost" href="/">&larr; Cancel</a>
+      </div>
+    </form>
+  </div>
 {% endblock %}

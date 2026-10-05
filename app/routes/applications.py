@@ -99,6 +99,8 @@ def _detail_context(
         "errors": errors,
         "status_options": list(config.STATUSES),
         "badge_color": config.STATUS_COLORS.get(application.status, "#6b7280"),
+        # Per-status colors for the timeline badges (initial event has no from).
+        "status_colors": config.STATUS_COLORS,
         "max_upload_mb": config.MAX_UPLOAD_MB,
     }
 
