@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Job Application Tracker{% endblock %}
+{% block content %}
+{# Placeholder home page: S3 replaces this with the full dashboard (§6) —
+   stat cards, waiting queue, filters and charts are NOT built here. #}
+<h1>Applications</h1>
+{% if applications %}
+  <table>
+    <thead>
+      <tr><th>Company</th><th>Title</th><th>Applied</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for application in applications %}
+        <tr>
+          <td><a href="/applications/{{ application.id }}">{{ application.company }}</a></td>
+          <td>{{ application.job_title }}</td>
+          <td>{{ application.applied_on.isoformat() }}</td>
+          <td><span class="badge" style="background: {{ status_colors.get(application.status, '#6b7280') }}">{{ application.status }}</span></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>No applications yet — <a href="/applications/new">add your first</a>.</p>
+{% endif %}
+{% endblock %}

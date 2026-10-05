@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.db import init_db
+from app.routes.applications import router as applications_router
 
 
 def create_app() -> FastAPI:
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "service": "job-tracker"}
 
     # S3: app.mount("/static", StaticFiles(directory=...), name="static").
+    app.include_router(applications_router)
 
     return app
 

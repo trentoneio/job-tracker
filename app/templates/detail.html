@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ application.company }} · {{ application.job_title }} — Job Application Tracker{% endblock %}
+{% block content %}
+<h1>
+  <a href="/">{{ application.company }}</a> · {{ application.job_title }}
+  &nbsp;<span class="badge" style="background: {{ badge_color }}">{{ application.status }}</span>
+</h1>
+
+<div class="meta">
+  <p><strong>Reference number:</strong> {{ application.reference_number or '—' }}</p>
+  <p><strong>Applied on:</strong> {{ application.applied_on.isoformat() }}</p>
+  <p><strong>Status:</strong> {{ application.status }}</p>
+  <p><strong>Job posting:</strong> {% if application.job_posting_url %}<a href="{{ application.job_posting_url }}">{{ application.job_posting_url }}</a>{% else %}—{% endif %}</p>
+  <p><strong>Notes:</strong> {{ application.notes or '—' }}</p>
+</div>
+
+<h2>Documents</h2>
+{% if application.resume_file_name %}
+  <p><a href="/files/{{ application.id }}/resume">{{ application.resume_file_name }}</a></p>
+{% else %}<p>Resume: none uploaded.</p>{% endif %}
+{% if application.application_file_name %}
+  <p><a href="/files/{{ application.id }}/application">{{ application.application_file_name }}</a></p>
+{% else %}<p>Application PDF: none uploaded.</p>{% endif %}
+
+<h2>Edit</h2>
+{# One inline form edits every field, including status (§5). #}
+{% if errors %}
+  <ul class="error-list">
+    {% for message in errors.values() %}<li>{{ message }}</li>{% endfor %}
+  </ul>
+{% endif %}
+
+<form method="post" action="/applications/{{ application.id }}/update" enctype="multipart/form-data">
+  <label for="company">Company *</label>
+  <input id="company" name="company" value="{{ values.get('company', application.company) }}">
+  {% if errors.company %}<p class="field-error">{{ errors.company }}</p>{% endif %}
+
+  <label for="job_title">Job title *</label>
+  <input id="job_title" name="job_title" value="{{ values.get('job_title', application.job_title) }}">
+  {% if errors.job_title %}<p class="field-error">{{ errors.job_title }}</p>{% endif %}
+
+  <label for="reference_number">Reference number</label>
+  <input id="reference_number" name="reference_number" value="{{ values.get('reference_number', application.reference_number or '') }}">
+
+  <label for="applied_on">Applied on *</label>
+  <input id="applied_on" name="applied_on" type="date" value="{{ values.get('applied_on', application.applied_on.isoformat()) }}">
+  {% if errors.applied_on %}<p class="field-error">{{ errors.applied_on }}</p>{% endif %}
+
+  <label for="status">Status</label>
+  <select id="status" name="status">
+    {% for option in status_options %}
+      <option value="{{ option }}" {% if values.get('status', application.status) == option %}selected{% endif %}>{{ option }}</option>
+    {% endfor %}
+  </select>
+  {% if errors.status %}<p class="field-error">{{ errors.status }}</p>{% endif %}
+
+  <label for="job_posting_url">Job posting URL</label>
+  <input id="job_posting_url" name="job_posting_url" type="url" value="{{ values.get('job_posting_url', application.job_posting_url or '') }}">
+
+  <label for="notes">Notes</label>
+  <textarea id="notes" name="notes" rows="4">{{ values.get('notes', application.notes or '') }}</textarea>
+
+  <label for="resume_pdf">Resume (PDF, max {{ max_upload_mb }} MB)</label>
+  <input id="resume_pdf" name="resume_pdf" type="file" accept=".pdf">
+  {% if application.resume_file_name %}<p class="hint">Leave empty to keep the current file ({{ application.resume_file_name }}).</p>{% endif %}
+  {% if errors.resume_pdf %}<p class="field-error">{{ errors.resume_pdf }}</p>{% endif %}
+
+  <label for="application_pdf">Application / cover letter (PDF, max {{ max_upload_mb }} MB)</label>
+  <input id="application_pdf" name="application_pdf" type="file" accept=".pdf">
+  {% if application.application_file_name %}<p class="hint">Leave empty to keep the current file ({{ application.application_file_name }}).</p>{% endif %}
+  {% if errors.application_pdf %}<p class="field-error">{{ errors.application_pdf }}</p>{% endif %}
+
+  <div class="actions"><button type="submit">Save changes</button></div>
+</form>
+
+<h2>Status timeline</h2>
+{# The full lifecycle from status_events — the source of truth (§4). #}
+<ol class="timeline">
+  {% for event in events %}
+    <li>{{ event.changed_at.date().isoformat() }} — {{ event.from_status if event.from_status else '(initial)' }} → {{ event.to_status }}</li>
+  {% endfor %}
+</ol>
+
+<div class="danger-zone">
+  <h2>Delete</h2>
+  <form method="post" action="/applications/{{ application.id }}/delete">
+    <label>
+      <input type="checkbox" name="confirm" required style="width:auto; margin-right:.4rem;">
+      I understand this permanently deletes the application, its status history and its PDFs.
+    </label>
+    <div class="actions"><button type="submit">Delete application</button></div>
+  </form>
+</div>
+{% endblock %}

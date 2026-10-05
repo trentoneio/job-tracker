@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Job Application Tracker{% endblock %}</title>
+  <style>
+    /* S2 placeholder styling — S3 replaces this with the real dashboard layout (§6). */
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 46rem; margin: 1.5rem auto; padding: 0 1rem; color: #1f2937; }
+    .site-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.25rem; }
+    h1 { font-size: 1.35rem; line-height: 1.4; }
+    h2 { font-size: 1.05rem; margin-top: 1.75rem; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    label { display: block; margin-top: .7rem; font-weight: 600; font-size: .95rem; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: .45rem .55rem; margin-top: .2rem; font: inherit; color: inherit; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
+    input[type="checkbox"] { width: auto; }
+    .hint { font-weight: 400; font-size: .8rem; color: #6b7280; margin-top: .15rem; }
+    .field-error { color: #b91c1c; font-size: .85rem; margin-top: .2rem; }
+    .error-list { list-style: none; padding: .6rem 1rem; margin-bottom: 1rem; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: .9rem; }
+    .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .8rem; color: #fff; background: #6b7280; vertical-align: middle; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid #e5e7eb; font-size: .95rem; }
+    ol.timeline { list-style: none; padding-left: 0; margin-top: .5rem; }
+    ol.timeline li { padding: .35rem 0; border-bottom: 1px dashed #e5e7eb; font-size: .92rem; }
+    .actions { margin-top: 1.25rem; display: flex; gap: .75rem; align-items: center; }
+    button[type="submit"] { padding: .5rem 1rem; border: none; border-radius: 6px; background: #2563eb; color: #fff; font: inherit; cursor: pointer; }
+    .danger-zone { margin-top: 2.5rem; padding-top: 1rem; border-top: 2px solid #fecaca; }
+    .meta p { margin: .3rem 0; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <h1><a href="/">Job Application Tracker</a></h1>
+    {% block header_actions %}
+      <p style="margin:0"><a href="/applications/new">+ New application</a></p>
+    {% endblock %}
+  </header>
+  {% block content %}{% endblock %}
+</body>
+</html>
