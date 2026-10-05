@@ -16,8 +16,9 @@ Layering follows §4: request handlers only call repo functions through
 
 from datetime import date
 from pathlib import Path
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -102,18 +103,46 @@ def _detail_context(
 
 
 @router.get("/")
-def index(request: Request):
-    """Placeholder home page until S3 builds the dashboard (§5/§6)."""
+def index(
+    request: Request,
+    company: Annotated[Optional[str], Query()] = None,
+    status: Annotated[list[str], Query()] = [],
+    date_from: Annotated[date | None, Query()] = None,
+    date_to: Annotated[date | None, Query()] = None,
+):
+    """Dashboard (§6).
+
+    All filters are optional (empty = everything) and reuse the exact S1
+    predicate via repo.list_applications. This same query string later drives
+    both CSV endpoints in S5. HTMX re-renders the whole page through this GET.
+    Malformed dates 422 automatically (FastAPI param validation).
+    """
+    company_value = _clean(company)
+    statuses = [value for value in status if value]
+
     with open_session() as session:
-        applications = repo.list_applications(session)
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {
-            "applications": applications,
-            "status_colors": config.STATUS_COLORS,
-        },
-    )
+        applications = repo.list_applications(
+            session,
+            company=company_value,
+            statuses=statuses,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+    return templates.TemplateResponse(request, "index.html", {
+        # Filter state so the re-rendered page keeps its selections.
+        "selected_company": company_value or "",
+        "selected_statuses": statuses,
+        "date_from_str": date_from.isoformat() if date_from else "",
+        "date_to_str": date_to.isoformat() if date_to else "",
+        "is_filtered": bool(company_value or statuses or date_from or date_to),
+        # Distinct companies within the current slice — same predicate as
+        # every widget below (PLAN.md §6 item 2).
+        "companies": sorted({app.company for app in applications}),
+        "statuses": config.STATUSES,
+        "status_colors": config.STATUS_COLORS,
+        "applications": applications,
+    })
 
 
 @router.get("/applications/new")

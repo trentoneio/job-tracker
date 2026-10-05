@@ -1,26 +1,75 @@
 {% extends "base.html" %}
+
 {% block title %}Dashboard — Job Application Tracker{% endblock %}
+
 {% block content %}
-{# Placeholder home page: S3 replaces this with the full dashboard (§6) —
-   stat cards, waiting queue, filters and charts are NOT built here. #}
-<h1>Applications</h1>
-{% if applications %}
-  <table>
-    <thead>
-      <tr><th>Company</th><th>Title</th><th>Applied</th><th>Status</th></tr>
-    </thead>
-    <tbody>
-      {% for application in applications %}
-        <tr>
-          <td><a href="/applications/{{ application.id }}">{{ application.company }}</a></td>
-          <td>{{ application.job_title }}</td>
-          <td>{{ application.applied_on.isoformat() }}</td>
-          <td><span class="badge" style="background: {{ status_colors.get(application.status, '#6b7280') }}">{{ application.status }}</span></td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-{% else %}
-  <p>No applications yet — <a href="/applications/new">add your first</a>.</p>
-{% endif %}
+  {# Filter bar (§6 item 2). The form re-renders the whole page through GET /:
+     hx-target="body" + outerHTML swaps in <head> stays untouched (HTMX keeps its
+     own listener; document-level handlers survive), and hx-push-url keeps the
+     browser URL equal to this exact query string — the one S5's CSV endpoints
+     will consume. Without JS the same GET works as a plain form submission. #}
+  <form class="filter-bar" method="get" action="/"
+        hx-get="/" hx-target="body" hx-swap="outerHTML" hx-push-url="true">
+
+    <div class="filter-field">
+      <label for="company-filter">Company</label>
+      <select id="company-filter" name="company">
+        <option value="">All companies</option>
+        {% for company in companies %}
+          <option value="{{ company }}" {% if company == selected_company %}selected{% endif %}>{{ company }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-field">
+      <span id="status-filter-label" class="filter-label">Status</span>
+      <div class="chip-row" role="group" aria-labelledby="status-filter-label">
+        {% for status in statuses %}
+          <label class="chip">
+            <input type="checkbox" name="status" value="{{ status }}" {% if status in selected_statuses %}checked{% endif %}>
+            {{ status }}
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="filter-field">
+      <label for="date-from">Applied from</label>
+      <input id="date-from" type="date" name="date_from" value="{{ date_from_str }}">
+    </div>
+
+    <div class="filter-field">
+      <label for="date-to">Applied to</label>
+      <input id="date-to" type="date" name="date_to" value="{{ date_to_str }}">
+    </div>
+
+    <div class="filter-actions">
+      <button type="submit" class="btn btn-primary">Apply filters</button>
+      {# Plain anchor too, so "clear" works without JS. #}
+      <a class="btn btn-ghost" href="/" hx-get="/" hx-target="body" hx-swap="outerHTML" hx-push-url="true">Clear filters</a>
+    </div>
+  </form>
+
+  {% if applications %}
+    <h2>Applications</h2>
+    <table class="table">
+      <thead>
+        <tr><th>Company</th><th>Title</th><th>Applied</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for application in applications %}
+          <tr>
+            <td><a href="/applications/{{ application.id }}">{{ application.company }}</a></td>
+            <td>{{ application.job_title }}</td>
+            <td>{{ application.applied_on.isoformat() }}</td>
+            <td><span class="badge" style="background: {{ status_colors.get(application.status, '#6b7280') }}">{{ application.status }}</span></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% elif is_filtered %}
+    <p class="empty-state">Nothing matches these filters. <a href="/">Clear filters</a>.</p>
+  {% else %}
+    <p class="empty-state">No applications yet — <a href="/applications/new">add your first</a>.</p>
+  {% endif %}
 {% endblock %}
