@@ -10,6 +10,7 @@ five options present on every page (dashboard, new application, detail)."""
 
 import re
 from datetime import date
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -86,3 +87,32 @@ def test_detail_page_has_theme_scaffolding(client):
 
 def test_all_five_palettes_are_defined(client):
     _assert_palettes(client.get("/").text)
+
+
+def _base_html_source() -> str:
+    """The raw template behind every page - the chart controller lives here."""
+    root = Path(__file__).resolve().parent.parent
+    return (root / "app" / "templates" / "base.html").read_text(encoding="utf-8")
+
+
+def test_sankey_series_sets_explicit_theme_label_color():
+    """ECharts 6 paints labels left at their default color with a baked-in white
+    halo (stroke + paint order). That wrecks readability on the dark themes, so
+    the Sankey series must carry an explicit label color fed by the active
+    theme's --chart-text variable."""
+    source = _base_html_source()
+    sankey_body = source[source.index("function renderSankey") : source.index("function renderPie")]
+    assert 'label: { color: cssVar("--chart-text")' in sankey_body, (
+        "sankey series has no explicit label color - ECharts 6 will paint its "
+        "default white text halo on dark themes"
+    )
+
+
+def test_pie_series_sets_explicit_theme_label_color():
+    """Same guard for the current-status pie: an explicit --chart-text-driven
+    label color (with its formatter intact), not ECharts' default."""
+    source = _base_html_source()
+    pie_body = source[source.index("function renderPie") : source.index("function renderCharts")]
+    assert 'color: cssVar("--chart-text")' in pie_body and "formatter" in pie_body, (
+        "pie label lost its explicit theme color or formatter"
+    )

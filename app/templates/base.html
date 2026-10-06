@@ -30,7 +30,10 @@
      any previous chart instances and re-render from the fresh data, so repeated
      filter submits never duplicate canvases or show stale flows. Pages without
      charts no-op. Text/line colors are read from CSS variables at render time,
-     so charts follow the active theme. #}
+     so charts follow the active theme. Every series also gets an explicit label
+     color: labels left at ECharts' default pick up a baked-in white text halo
+     (stroke + paint-order), which reads badly on the dark themes — setting the
+     palette color suppresses it and keeps labels legible in every theme. #}
   <script>
     (function () {
       var sankeyChart = null;
@@ -73,6 +76,7 @@
             data: payload.nodes,
             links: payload.links,
             emphasis: { focus: "adjacency" },
+            label: { color: cssVar("--chart-text") || "#6b7280" },
             lineStyle: { color: "gradient", curveness: 0.5 }
           }]
         });
@@ -93,7 +97,7 @@
             data: payload.slices.map(function (slice) {
               return { name: slice.status, value: slice.count };
             }),
-            label: { formatter: "{b}: {c} ({d}%)" },
+            label: { color: cssVar("--chart-text") || "#6b7280", formatter: "{b}: {c} ({d}%)" },
             labelLine: { lineStyle: { color: cssVar("--chart-line") || "#d1d5db" } }
           }]
         });
