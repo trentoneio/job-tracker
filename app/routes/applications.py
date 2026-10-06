@@ -88,12 +88,15 @@ def _parse_history_pairs(
     return entries, problems
 
 
-def _parse_status_date(raw: str, errors: dict[str, str]) -> date | None:
-    """Parse the optional status-change-date field.
+def _parse_status_date(
+    raw: str, errors: dict[str, str], error_key: str = "status_changed_on"
+) -> date | None:
+    """Parse an optional status-change-date field.
 
-    Blank means "use today" (no error). Invalid formats and future dates are
-    reported in ``errors``; backdating is allowed so a change remembered days
-    later can be recorded on when it actually happened.
+    Blank means "keep / use today depending on the form" (no error). Invalid
+    formats and future dates are reported in ``errors[error_key]``; backdating
+    is allowed so a change remembered days later can be recorded on when it
+    actually happened.
     """
     text = raw.strip()
     if not text:
@@ -101,13 +104,11 @@ def _parse_status_date(raw: str, errors: dict[str, str]) -> date | None:
     try:
         parsed = date.fromisoformat(text)
     except ValueError:
-        errors["status_changed_on"] = (
-            f"{text} is not a valid date (expected YYYY-MM-DD)."
-        )
+        errors[error_key] = f"{text} is not a valid date (expected YYYY-MM-DD)."
         return None
     today = datetime.now(timezone.utc).date()
     if parsed > today:
-        errors["status_changed_on"] = "The status change date cannot be in the future."
+        errors[error_key] = "The status change date cannot be in the future."
         return None
     return parsed
 
@@ -501,6 +502,52 @@ async def update_application(
             events = repo.get_status_events(session, application.id)
         return templates.TemplateResponse(
             request, "detail.html", _detail_context(application, events, values, errors)
+        )
+
+    return RedirectResponse(f"/applications/{application_id}", status_code=303)
+
+
+@router.post("/applications/{application_id}/events/{event_id}")
+def update_status_event_route(
+    request: Request,
+    application_id: int,
+    event_id: int,
+    changed_on: str = Form(""),
+    new_status: str = Form(""),
+):
+    """Correct one recorded step of the status timeline in place.
+
+    ``changed_on`` blank keeps the step's date; ``new_status`` (sent only by
+    non-initial rows) corrects which status that step reached. Invalid or
+    chain-breaking corrections re-render the detail page with a message;
+    otherwise redirects back to the detail page."""
+    errors: dict[str, str] = {}
+    new_date = _parse_status_date(changed_on, errors, error_key="timeline")
+    status_value = _clean(new_status)  # None when blank / absent
+    updated_event = None
+
+    with open_session() as session:
+        application = repo.get_application(session, application_id)
+        if application is None:
+            raise HTTPException(status_code=404, detail="Application not found")
+        try:
+            updated_event = repo.update_status_event(
+                session,
+                application_id,
+                event_id,
+                to_status=status_value,
+                changed_on=new_date,
+            )
+        except ValueError as exc:
+            errors["timeline"] = str(exc)
+
+    if errors or updated_event is None:
+        with open_session() as session:
+            events = repo.get_status_events(session, application_id)
+        return templates.TemplateResponse(
+            request,
+            "detail.html",
+            _detail_context(application, events, {}, {"timeline": errors["timeline"] if "timeline" in errors else "Status step not found."}),
         )
 
     return RedirectResponse(f"/applications/{application_id}", status_code=303)

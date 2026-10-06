@@ -110,12 +110,14 @@
     </form>
   </div>
 
-  {# The full lifecycle from status_events — the append-only source of truth. #}
+  {# The full lifecycle from status_events — the source of truth. Every step is
+     inline-editable so a mis-keyed date or intermediate status can be fixed in
+     place instead of deleting and recreating the application. #}
   <h2>Status timeline</h2>
+  {% if errors.timeline %}<p class="field-error">{{ errors.timeline }}</p>{% endif %}
   <ol class="timeline">
     {% for event in events %}
       <li>
-        <time>{{ event.changed_at.date().isoformat() }}</time>
         {% if event.from_status is none %}
           <span class="timeline-initial">(created)</span> &rarr;
         {% else %}
@@ -123,9 +125,21 @@
           &rarr;
         {% endif %}
         <span class="badge" style="background: {{ status_colors.get(event.to_status, '#6b7280') }}">{{ event.to_status }}</span>
+
+        <form method="post" action="/applications/{{ application.id }}/events/{{ event.id }}" class="event-edit">
+          <input type="date" name="changed_on" aria-label="Date of this step"
+                 value="{{ event.changed_at.date().isoformat() }}">
+          {% if not loop.first %}
+            <select name="new_status" aria-label="Status reached at this step">
+              {% for option in status_options %}<option value="{{ option }}" {% if option == event.to_status %}selected{% endif %}>{{ option }}</option>{% endfor %}
+            </select>
+          {% endif %}
+          <button type="submit" class="btn btn-small">Save</button>
+        </form>
       </li>
     {% endfor %}
   </ol>
+  <p class="hint">Every step is editable: fix a wrong date, or (from the second step on) which status was actually reached. Corrections are validated so the timeline stays in order.</p>
 
   <div class="danger-zone">
     <h2>Delete</h2>

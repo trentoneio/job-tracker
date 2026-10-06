@@ -145,6 +145,73 @@ def test_create_with_malformed_history_renders_error_and_creates_nothing(client)
     assert "No applications yet" in home.text
 
 
+def test_fix_miskeyed_rejection_date_in_place(client):
+    """The reported bug: a wrong rejection date used to force delete + recreate."""
+    response = _create(
+        client,
+        applied_on="2026-09-01",
+        history_status=["interviewing", "rejected"],
+        history_date=["2026-09-05", "2026-09-20"],
+    )
+    application_id = _created_id(response)
+
+    with open_session() as session:
+        rejected_step = next(
+            e for e in repo.get_status_events(session, application_id) if e.to_status == "rejected"
+        )
+        step_id = rejected_step.id
+
+    fix = client.post(
+        f"/applications/{application_id}/events/{step_id}",
+        data={"changed_on": "2026-09-25"},
+        follow_redirects=False,
+    )
+    assert fix.status_code == 303
+
+    with open_session() as session:
+        chain = [
+            (e.from_status, e.to_status, e.changed_at.date())
+            for e in repo.get_status_events(session, application_id)
+        ]
+        row = repo.get_application(session, application_id)
+    # No extra step was appended; the existing one moved.
+    assert [c[1] for c in chain] == ["received", "interviewing", "rejected"]
+    assert chain[-1][2] == date(2026, 9, 25)
+    assert row.status == "rejected"
+
+
+def test_timeline_edit_rejects_first_step_status_change(client):
+    response = _create(client, applied_on="2026-09-01")
+    application_id = _created_id(response)
+    with open_session() as session:
+        (first,) = repo.get_status_events(session, application_id)
+        first_id = first.id
+
+    bad = client.post(
+        f"/applications/{application_id}/events/{first_id}",
+        data={"new_status": "interviewing"},
+    )
+    assert bad.status_code == 200
+    # (quotes are HTML-escaped in the rendered page)
+    assert "the first step always stays" in bad.text
+
+
+def test_timeline_rendered_with_inline_edit_forms(client):
+    response = _create(
+        client,
+        applied_on="2026-09-01",
+        history_status=["interviewing", "rejected"],
+        history_date=["2026-09-05", "2026-09-20"],
+    )
+    application_id = _created_id(response)
+
+    page = client.get(f"/applications/{application_id}").text
+    # One edit form per recorded step (three here), the first without a status select.
+    assert page.count('class="event-edit"') == 3
+    assert 'name="changed_on"' in page
+    assert page.count("name=\"new_status\"") == 2  # only non-initial steps
+
+
 def test_index_lists_all_applications(client):
     home = client.get("/")
     assert home.status_code == 200

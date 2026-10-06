@@ -138,6 +138,98 @@ def test_create_history_rejects_consecutive_duplicate_status(session):
         )
 
 
+def test_update_event_date_moves_only_that_step(session):
+    app = _make(
+        session,
+        history=[("interviewing", date(2026, 9, 5)), ("accepted", date(2026, 9, 20))],
+    )
+    events = _events(session, app.id)
+    updated = repo.update_status_event(
+        session, app.id, events[1].id, changed_on=date(2026, 9, 7)
+    )
+
+    assert updated is not None and updated.to_status == "interviewing"
+    chain = [(e.from_status, e.changed_at.date()) for e in _events(session, app.id)]
+    assert chain == [
+        (None, date(2026, 9, 1)),
+        ("received", date(2026, 9, 7)),  # moved within its neighbours' range
+        ("interviewing", date(2026, 9, 20)),
+    ]
+
+
+def test_update_middle_status_cascades_to_next_from(session):
+    app = _make(
+        session,
+        history=[("interviewing", date(2026, 9, 5)), ("accepted", date(2026, 9, 20))],
+    )
+    events = _events(session, app.id)
+
+    repo.update_status_event(session, app.id, events[1].id, to_status="offer")
+
+    chain = [(e.from_status, e.to_status) for e in _events(session, app.id)]
+    assert chain == [
+        (None, "received"),
+        ("received", "offer"),
+        ("offer", "accepted"),  # from_status followed the correction
+    ]
+    row = repo.get_application(session, app.id)
+    assert row.status == "accepted"  # last event untouched
+
+
+def test_update_last_status_changes_current_status(session):
+    app = _make(
+        session,
+        history=[("interviewing", date(2026, 9, 5)), ("accepted", date(2026, 9, 20))],
+    )
+    events = _events(session, app.id)
+
+    repo.update_status_event(session, app.id, events[2].id, to_status="rejected")
+
+    row = repo.get_application(session, app.id)
+    assert row.status == "rejected"
+
+
+def test_update_first_event_cannot_change_status(session):
+    app = _make(session)
+    (event,) = _events(session, app.id)
+
+    with pytest.raises(ValueError, match="always stays 'received'"):
+        repo.update_status_event(session, app.id, event.id, to_status="interviewing")
+
+
+def test_update_event_date_cannot_cross_neighbours(session):
+    app = _make(
+        session,
+        history=[("interviewing", date(2026, 9, 5)), ("accepted", date(2026, 9, 20))],
+    )
+    events = _events(session, app.id)
+
+    with pytest.raises(ValueError, match="before the previous change"):
+        repo.update_status_event(
+            session, app.id, events[1].id, changed_on=date(2026, 8, 30)
+        )
+    with pytest.raises(ValueError, match="after the next change"):
+        repo.update_status_event(
+            session, app.id, events[1].id, changed_on=date(2026, 9, 25)
+        )
+
+
+def test_update_middle_status_cannot_match_next_target(session):
+    app = _make(
+        session,
+        history=[("interviewing", date(2026, 9, 5)), ("accepted", date(2026, 9, 20))],
+    )
+    events = _events(session, app.id)
+
+    with pytest.raises(ValueError, match="the next step already ends there"):
+        repo.update_status_event(session, app.id, events[1].id, to_status="accepted")
+
+
+def test_update_unknown_event_returns_none(session):
+    app = _make(session)
+    assert repo.update_status_event(session, app.id, 999_999) is None
+
+
 def test_create_rejects_non_received_initial_status(session):
     with pytest.raises(ValueError, match="always start at 'received'"):
         _make(session, status="offer")

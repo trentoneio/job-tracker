@@ -5,8 +5,10 @@ Two tables:
 * ``applications`` — one row per application; its ``status`` column always
   mirrors the latest event in ``status_events`` (the repository layer keeps
   that invariant).
-* ``status_events`` — append-only history of status changes. This is the
-  source of truth for lifecycle reconstruction and the Sankey diagram.
+* ``status_events`` — ordered history of status changes; individual steps can
+  be corrected in place (see ``repo.update_status_event``) but always as a
+  valid chain. This is the source of truth for lifecycle reconstruction and
+  the Sankey diagram.
 
 All timestamps are naive UTC datetimes; stored UTC, displayed locally as
 plain dates.

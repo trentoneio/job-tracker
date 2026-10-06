@@ -12,13 +12,14 @@ SQLite database plus an upload folder is the entire state of the app.
 - **Applications** with company, job title, reference number, applied date,
   posting URL, notes, and up to two PDFs (resume + full application), each
   validated as a real `.pdf` file of at most 15 MB before it touches disk.
-- **Append-only status history.** Every change appends exactly one event to an
-  immutable timeline you can replay on the detail page. You can also enter the
-  date a change actually happened (backdating is allowed; future dates are
-  rejected), so a remembered update lands where it belongs in the timeline.
-  When creating an application you can record the whole journey at once —
-  applied, interviewed, accepted, whatever already happened — and each step
-  becomes its own dated event.
+- **Editable status history.** Every change appends one dated event to the
+  timeline on the detail page, and every existing step can be corrected in
+  place — a mis-keyed date or an intermediate status — without deleting and
+  recreating the application. You can also enter the date a change actually
+  happened (backdating is allowed; future dates are rejected), so a remembered
+  update lands where it belongs. When creating an application you can record
+  the whole journey at once — applied, interviewed, accepted, whatever already
+  happened — and each step becomes its own dated event.
 - **Automatic ghosting.** Applications that sit at `received` for more than
   180 days without any update are moved to `ghosted` automatically, with an
   event recording when the sweep ran. The threshold is configurable via the
@@ -83,10 +84,11 @@ table — every widget computed over the same filtered slice.
   `received`.
 - **Track status over time** from the application's detail page: pick a new
   status (and edit any other field), optionally enter the date the change
-  actually happened, and save. Every real change appends exactly one row to
-  the append-only history that the timeline below shows — including when it
-  first became `received`. Deleting an application removes its history rows and
-  both stored PDFs.
+  actually happened, and save. Every real change appends exactly one dated row
+  to the event history that the timeline below shows — including when it first
+  became `received` — and every existing step can be corrected in place from
+  the same page. Deleting an application removes its history rows and both
+  stored PDFs.
 - **Filter** by company, current status (multi-select chips), or applied-date
   range; "Clear filters" returns to the full dataset.
 - **Export** from the header as described in Features. Filenames are
@@ -162,8 +164,9 @@ capped at 15 MB, so even hundreds of applications occupy well under a gigabyte.
 
 ## Architecture notes
 
-- **Layers:** `app/repo.py` owns every database rule (status vocabulary, the
-  append-only event chain, auto-ghosting); request handlers in `app/routes/`
+- **Layers:** `app/repo.py` owns every database rule (status vocabulary,
+  status-event chain consistency, including in-place step corrections,
+  auto-ghosting); request handlers in `app/routes/`
   only call repo functions through short-lived sessions; pure display math
   lives in `app/dashboard.py` and `app/analytics.py`, which makes the charts'
   payloads unit-testable without HTTP.

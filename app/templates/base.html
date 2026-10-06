@@ -318,6 +318,16 @@
     ol.timeline time { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.2rem; }
     .timeline-initial { color: var(--muted); font-size: .85rem; }
 
+    /* Inline per-step editing on the status timeline */
+    .event-edit { display: inline-flex; align-items: center; gap: .4rem; margin-left: .3rem; flex-wrap: wrap; }
+    .event-edit input[type="date"] { width: auto; padding: .25rem .45rem; font-size: .82rem;
+      color: var(--text); background-color: var(--surface);
+      border: 1px solid var(--border-strong); border-radius: 6px; }
+    .event-edit select { width: auto; max-width: 9.5rem; padding: .25rem .45rem; font-size: .82rem;
+      color: var(--text); background-color: var(--surface);
+      border: 1px solid var(--border-strong); border-radius: 6px; }
+    .btn-small { padding: .3rem .7rem; font-size: .82rem; }
+
     /* Charts: fixed heights give ECharts a concrete canvas size. The head
        controller renders into these and shows empty-state text inside */
     .chart { height: 21rem; }

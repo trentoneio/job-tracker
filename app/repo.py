@@ -35,6 +35,18 @@ def _midnight_utc(day: date) -> datetime:
     return datetime.combine(day, time.min).replace(tzinfo=timezone.utc)
 
 
+def _as_naive_utc(value: datetime) -> datetime:
+    """Normalise a persisted timestamp to naive UTC for comparisons.
+
+    SQLite hands back offset-naive datetimes while freshly built values carry
+    a UTC zone; comparisons only make sense on one side or the other, so
+    compare in naive space and keep aware values when binding.
+    """
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
 def create_application(
     session: Session,
     *,
@@ -184,6 +196,96 @@ def get_status_events(session: Session, application_id: int) -> list[StatusEvent
     query = select(StatusEvent).where(StatusEvent.application_id == application_id)
     query = query.order_by(StatusEvent.changed_at.asc(), StatusEvent.id.asc())
     return list(session.scalars(query))
+
+
+def update_status_event(
+    session: Session,
+    application_id: int,
+    event_id: int,
+    *,
+    to_status: Optional[str] = None,  # None keeps the step's current status
+    changed_on: Optional[date] = None,  # None keeps the step's current date
+) -> Optional[StatusEvent]:
+    """Correct one recorded step of an application's timeline in place.
+
+    This exists so backfilled data can be fixed without deleting and
+    recreating the whole application (or appending a confusing extra step).
+    The chain stays valid by construction:
+
+    * The first event always starts at ``received`` — only its DATE may
+      change; any status edit on it is rejected.
+    * Later events may change date and/or status. A status correction never
+      repeats the previous step (that would be a no-op loop) nor match the
+      next step's target (a self-loop); when applied, the following event's
+      ``from_status`` cascades so every row still links to its neighbour.
+    * A new date must stay within the neighbouring events' dates; same-day
+      steps remain legal and keep insertion order on ties.
+
+    Correcting the LAST step also updates ``application.status``. Any edit
+    bumps ``updated_at`` so auto-ghosting and "days since update" see it.
+
+    Returns the updated event, or ``None`` when no event with this id belongs
+    to the application. Raises ``ValueError`` (user-facing message) when the
+    correction would break the chain; commits on success.
+    """
+    if to_status is not None and to_status not in STATUSES:
+        raise ValueError(f"unknown status {to_status!r}")
+
+    events = get_status_events(session, application_id)
+    event = next((e for e in events if e.id == event_id), None)
+    if event is None:
+        return None
+
+    index = events.index(event)
+    previous = events[index - 1] if index > 0 else None
+    following = events[index + 1] if index < len(events) - 1 else None
+
+    if changed_on is not None:
+        # Compare in naive-UTC space (see _as_naive_utc); the aware value
+        # below is what actually gets bound.
+        new_naive = datetime.combine(changed_on, time.min)
+        if previous is not None and new_naive < _as_naive_utc(previous.changed_at):
+            raise ValueError(
+                "this step can't be dated before the previous change "
+                f"({previous.changed_at.date().isoformat()})"
+            )
+        if following is not None and new_naive > _as_naive_utc(following.changed_at):
+            raise ValueError(
+                "this step can't be dated after the next change "
+                f"({following.changed_at.date().isoformat()})"
+            )
+
+    if to_status is not None:
+        if previous is None:
+            # The initial event's target is fixed by definition.
+            if to_status != event.to_status:
+                raise ValueError(
+                    "the first step always stays 'received'; only its date can change"
+                )
+        elif to_status == previous.to_status:
+            raise ValueError(
+                f"this step already starts from '{previous.to_status}'; pick a different status"
+            )
+        elif following is not None and to_status == following.to_status:
+            raise ValueError(
+                f"can't set this step to '{to_status}' — the next step already "
+                "ends there; correct the later step first"
+            )
+
+    if changed_on is not None:
+        event.changed_at = _midnight_utc(changed_on)
+
+    # A real status correction (a same-status resubmission is a no-op).
+    application = session.get(Application, application_id)
+    if previous is not None and to_status is not None and to_status != event.to_status:
+        event.to_status = to_status
+        if following is not None:
+            following.from_status = to_status  # keep the chain unbroken
+        if index == len(events) - 1:
+            application.status = to_status
+    application.updated_at = utc_now()
+    session.commit()
+    return event
 
 
 def get_status_events_for_filter(
