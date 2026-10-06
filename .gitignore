@@ -11,5 +11,10 @@ data/
 *.db
 *.sqlite3
 
+# Internal planning documents — local continuity files, not part of the public repo
+PLAN.md
+SESSION_LOG.md
+prompts/
+
 # Docker build artifacts kept locally only
 .docker/

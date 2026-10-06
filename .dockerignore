@@ -6,6 +6,8 @@
 data/
 tests/
 prompts/
+PLAN.md
+SESSION_LOG.md
 __pycache__/
 *.pyc
 .pytest_cache/
