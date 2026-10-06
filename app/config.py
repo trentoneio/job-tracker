@@ -13,6 +13,11 @@ DATA_DIR = os.getenv("DATA_DIR", "/app/data")
 # Per-file upload size cap in MB (§7).
 MAX_UPLOAD_MB = 15
 
+# Automatic ghosting threshold: an application still at ``received`` with no
+# update for more than this many days is moved to ``ghosted`` (see
+# repo.auto_ghost_stale_received). Override via env, e.g. GHOST_AFTER_DAYS=90.
+GHOST_AFTER_DAYS = int(os.getenv("GHOST_AFTER_DAYS", "180"))
+
 # Status vocabulary (§4.1). Adding a status later is one line here plus one
 # STATUS_COLORS entry below (S3 renders the badge colors).
 STATUSES = ("received", "interviewing", "offer", "accepted", "rejected", "ghosted")

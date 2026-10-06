@@ -5,15 +5,15 @@ the real DATA_DIR (and thus any user data) is never touched, per PLAN.md §7.
 """
 
 import time
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
-from app import repo
+from app import config, repo
 from app.db import create_db_engine, init_db, make_session_factory
-from app.models import Application, StatusEvent
+from app.models import Application, StatusEvent, utc_now
 
 
 @pytest.fixture()
@@ -345,3 +345,96 @@ def test_foreign_keys_pragma_is_enforced(engine):
     # foreign_keys must be ON per connection for the FK CASCADE to work
     with engine.connect() as conn:
         assert conn.execute(text("PRAGMA foreign_keys")).scalar() == 1
+
+
+# ---------------------------------------------------------------------------
+# automatic ghosting of stale "received" applications
+# ---------------------------------------------------------------------------
+
+_REF_TODAY = date(2026, 9, 15)  # fixed reference day; passed explicitly as today
+
+
+def _at_midnight(days_before_ref):
+    """Naive UTC midnight exactly *days_before_ref* days before the ref day."""
+    return datetime.combine(
+        _REF_TODAY - timedelta(days=days_before_ref), datetime.min.time()
+    )
+
+
+def test_auto_ghost_moves_stale_received_and_appends_event(session):
+    app = _make(session)
+    old_time = _at_midnight(config.GHOST_AFTER_DAYS + 1)  # one day past the window
+    app.updated_at = old_time
+    session.commit()
+
+    ghosted_ids = repo.auto_ghost_stale_received(session, today=_REF_TODAY)
+
+    assert ghosted_ids == [app.id]
+    fresh = session.get(Application, app.id)
+    assert fresh.status == "ghosted"
+    # exactly one new event, stamped at the current time (not the stale day)
+    events = _events(session, app.id)
+    assert [(e.from_status, e.to_status) for e in events] == [
+        (None, "received"),
+        ("received", "ghosted"),
+    ]
+    assert events[-1].changed_at > old_time
+
+
+def test_auto_ghost_exactly_180_days_does_not_trigger(session):
+    app = _make(session)
+    app.updated_at = _at_midnight(config.GHOST_AFTER_DAYS)  # exactly the boundary
+    session.commit()
+
+    assert repo.auto_ghost_stale_received(session, today=_REF_TODAY) == []
+    fresh = session.get(Application, app.id)
+    assert fresh.status == "received"
+    assert len(_events(session, app.id)) == 1
+
+
+def test_auto_ghost_ignores_non_received_statuses(session):
+    app = _make(session)
+    repo.update_application(session, app.id, status="interviewing")
+    old_time = _at_midnight(config.GHOST_AFTER_DAYS + 30)
+    app.updated_at = old_time
+    session.commit()
+
+    assert repo.auto_ghost_stale_received(session, today=_REF_TODAY) == []
+    fresh = session.get(Application, app.id)
+    assert fresh.status == "interviewing"
+
+
+def test_auto_ghost_recently_updated_received_is_left_alone(session):
+    # A fresh creation has updated_at "now", which is inside the window no
+    # matter what reference day we pick (as long as it isn't in the past).
+    app = _make(session)
+
+    assert repo.auto_ghost_stale_received(
+        session, today=utc_now().date() + timedelta(days=1)
+    ) == []
+    fresh = session.get(Application, app.id)
+    assert fresh.status == "received"
+
+
+def test_auto_ghost_uses_real_today_by_default(session):
+    app = _make(session)
+    real_today = utc_now().date()
+    app.updated_at = datetime.combine(
+        real_today - timedelta(days=config.GHOST_AFTER_DAYS + 1),
+        datetime.min.time(),
+    )
+    session.commit()
+
+    ghosted_ids = repo.auto_ghost_stale_received(session)  # no explicit today
+    assert ghosted_ids == [app.id]
+
+
+def test_auto_ghost_is_idempotent_when_run_again_immediately(session):
+    app = _make(session)
+    old_time = _at_midnight(config.GHOST_AFTER_DAYS + 5)
+    app.updated_at = old_time
+    session.commit()
+
+    assert repo.auto_ghost_stale_received(session, today=_REF_TODAY) == [app.id]
+    # The bump to "now" during the first run takes it out of the window.
+    assert repo.auto_ghost_stale_received(session, today=_REF_TODAY) == []

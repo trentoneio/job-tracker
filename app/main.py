@@ -8,7 +8,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.db import init_db
+from app import repo
+from app.db import init_db, open_session
 from app.routes.applications import router as applications_router
 from app.routes.exports import router as exports_router
 
@@ -25,6 +26,12 @@ def create_app() -> FastAPI:
         # Ensure the SQLite database (and its data directory) exists before
         # serving any request (§7); idempotent across restarts.
         init_db()
+        # Applications that sat at "received" for more than GHOST_AFTER_DAYS
+        # without an update are ghosted once here, and again on every
+        # dashboard load (see the index route) so a long-running server needs
+        # no restart to apply it.
+        with open_session() as session:
+            repo.auto_ghost_stale_received(session)
         yield
 
     app = FastAPI(title="Job Application Tracker", lifespan=lifespan)

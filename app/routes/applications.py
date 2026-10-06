@@ -146,6 +146,10 @@ def index(
     statuses = [value for value in status if value]
 
     with open_session() as session:
+        # Cheap safety net for long-running servers: anything that has sat at
+        # "received" past GHOST_AFTER_DAYS without an update is ghosted before
+        # the page is built (also runs once at startup).
+        repo.auto_ghost_stale_received(session)
         applications = repo.list_applications(
             session,
             company=company_value,

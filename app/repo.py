@@ -13,13 +13,13 @@ Conventions:
 """
 
 from collections.abc import Iterable
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import STATUSES
+from app.config import GHOST_AFTER_DAYS, STATUSES
 from app.models import Application, StatusEvent, utc_now
 
 _MISSING = object()
@@ -275,6 +275,46 @@ def update_application(
     application.updated_at = utc_now()
     session.commit()
     return application
+
+
+def auto_ghost_stale_received(
+    session: Session, *, today: date | None = None
+) -> list[int]:
+    """Ghost applications stuck at ``received`` past the inactivity window.
+
+    An application is stale when its current status is ``received`` and it has
+    had no update for more than ``config.GHOST_AFTER_DAYS`` days (default 180):
+    ``updated_at`` strictly before midnight UTC on (today − GHOST_AFTER_DAYS).
+    Exactly the boundary day does not trigger; one day past it does. Any edit
+    — status or otherwise — resets ``updated_at``, so a touched application is
+    never ghosted.
+
+    Each stale application gets its status flipped to ``ghosted`` with exactly
+    one new event (received → ghosted) stamped at the current time, and its
+    ``updated_at`` bumped. Everything runs in a single transaction: all-or-
+    nothing on failure. Returns the affected application ids.
+    """
+    today = today or utc_now().date()
+    cutoff = datetime.combine(
+        today - timedelta(days=GHOST_AFTER_DAYS), time.min
+    )
+    query = select(Application).where(
+        Application.status == "received",
+        Application.updated_at < cutoff,
+    )
+    stale = list(session.scalars(query))
+    for application in stale:
+        session.add(
+            StatusEvent(
+                application_id=application.id,
+                from_status="received",
+                to_status="ghosted",
+            )
+        )
+        application.status = "ghosted"
+        application.updated_at = utc_now()
+    session.commit()
+    return [app.id for app in stale]
 
 
 def delete_application(session: Session, application_id: int) -> bool:
