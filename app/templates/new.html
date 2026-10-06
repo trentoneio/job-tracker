@@ -42,6 +42,26 @@
           {% if errors.applied_on %}<p class="field-error">{{ errors.applied_on }}</p>{% endif %}
         </div>
 
+        {# Optional backdated journey: one row per status change that already
+           happened, so old applications can be entered in a single submit. #}
+        <div class="form-full">
+          <label>Recorded status changes (optional)</label>
+          {% if errors.history %}<p class="field-error">{{ errors.history }}</p>{% endif %}
+          <div class="history-rows">
+            {% for step_status, step_date in values.get("history", [("", "")]) %}
+              <div class="history-row">
+                <select name="history_status" aria-label="Status changed to, step {{ loop.index }}">
+                  <option value="" {% if not step_status %}selected{% endif %}>status&hellip;</option>
+                  {% for option in statuses %}<option value="{{ option }}" {% if option == step_status %}selected{% endif %}>{{ option }}</option>{% endfor %}
+                </select>
+                <input type="date" name="history_date" aria-label="Date of change, step {{ loop.index }}" value="{{ step_date }}">
+              </div>
+            {% endfor %}
+          </div>
+          <p class="hint">Record the whole journey at once: each row is a status change with its own date (e.g. interviewing on one day, accepted later). The Status Flow diagram shows every step.</p>
+          <button type="button" id="add-history-row" class="btn btn-ghost">Add another status change</button>
+        </div>
+
         <div class="form-full">
           <label for="job_posting_url">Job posting URL</label>
           <input id="job_posting_url" name="job_posting_url" type="url" value="{{ values.get('job_posting_url', '') }}">
@@ -71,4 +91,17 @@
       </div>
     </form>
   </div>
+
+  {# "Add another status change" clones the last history row; plain DOM, no deps. #}
+  <script>
+    document.addEventListener("click", function (event) {
+      var button = event.target.closest ? event.target.closest("#add-history-row") : null;
+      if (!button) return;
+      var rows = button.parentElement.querySelector(".history-rows");
+      var fresh = rows.lastElementChild.cloneNode(true);
+      fresh.querySelector("select").selectedIndex = 0;  // back to the empty option
+      fresh.querySelector('input[type="date"]').value = "";
+      rows.appendChild(fresh);
+    });
+  </script>
 {% endblock %}

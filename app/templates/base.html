@@ -296,6 +296,11 @@
     textarea { min-height: 5.5rem; resize: vertical; }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1.1rem; }
     @media (max-width: 48rem) { .form-grid { grid-template-columns: 1fr; } }
+    /* Recorded-history rows on the create form (one status + date per row). */
+    .history-rows { display: flex; flex-direction: column; gap: .5rem; margin-top: .2rem; }
+    .history-row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+    .history-row select { flex: 0 1 13rem; }
+    .history-row input[type="date"] { flex: 0 1 12rem; }
     .form-full { grid-column: 1 / -1; }
     .error-list { margin: 0 0 1rem; padding-left: 1.2rem; color: var(--error); font-size: .9rem; }
     .field-error { display: block; margin-top: .3rem; color: var(--error); font-size: .85rem; }

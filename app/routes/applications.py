@@ -3,8 +3,9 @@
 Create / detail / inline edit+status change / delete, plus multipart PDF
 uploads. Forms post to real endpoints and redirect after success; validation
 problems re-render the same form with inline messages — there is no JSON API
-in this layer. New applications always start at ``received``; the create form
-has no status field.
+in this layer. New applications start at ``received``; the create form can
+optionally record a backdated journey (one status + date per step) which is
+written straight into the event log.
 
 Layering: request handlers only call repo functions through
 ``open_session()``; PDF filesystem work goes to ``app/uploads.py``.
@@ -49,6 +50,42 @@ def _parse_applied_on(raw: str, errors: dict[str, str]) -> date | None:
     except ValueError:
         errors["applied_on"] = f"{text} is not a valid date (expected YYYY-MM-DD)."
         return None
+
+
+def _parse_history_pairs(
+    statuses_raw: list[str], dates_raw: list[str]
+) -> tuple[list[tuple[str, date]], list[str]]:
+    """Pair up the optional recorded-history rows from the create form.
+
+    Returns ``(entries, problems)``. *entries* holds one clean
+    ``(status, change_date)`` pair per non-empty row (input order kept —
+    ``repo.create_application`` re-sorts by date and enforces the semantic
+    rules). *problems* collects format-level failures only; the status select
+    can never present an unknown value, so membership is checked in the repo.
+    """
+    entries: list[tuple[str, date]] = []
+    problems: list[str] = []
+    today = datetime.now(timezone.utc).date()
+    for index, (raw_status, raw_date) in enumerate(zip(statuses_raw, dates_raw), start=1):
+        status_text = (raw_status or "").strip()
+        date_text = (raw_date or "").strip()
+        if not status_text and not date_text:
+            continue  # untouched empty row
+        if not status_text or not date_text:
+            problems.append(f"Step {index}: needs both a status and a date.")
+            continue
+        try:
+            change_date = date.fromisoformat(date_text)
+        except ValueError:
+            problems.append(
+                f"Step {index}: {date_text} is not a valid date (expected YYYY-MM-DD)."
+            )
+            continue
+        if change_date > today:
+            problems.append(f"Step {index}: the step date cannot be in the future.")
+            continue
+        entries.append((status_text, change_date))
+    return entries, problems
 
 
 def _parse_status_date(raw: str, errors: dict[str, str]) -> date | None:
@@ -104,6 +141,7 @@ def _new_context(values: dict[str, object], errors: dict[str, str]) -> dict[str,
     return {
         "values": values,
         "errors": errors,
+        "statuses": list(config.STATUSES),
         "max_upload_mb": config.MAX_UPLOAD_MB,
     }
 
@@ -246,9 +284,15 @@ async def create_application(
     notes: str = Form(""),
     resume_pdf: UploadFile | None = File(None),
     application_pdf: UploadFile | None = File(None),
+    history_status: Annotated[list[str], Form()] = [],
+    history_date: Annotated[list[str], Form()] = [],
 ):
-    """Create an application (always starting at ``received``) and store any
-    uploaded PDFs. Redirects to the new detail page."""
+    """Create an application and store any uploaded PDFs.
+
+    The optional recorded-history rows (``history_status[i]`` paired with
+    ``history_date[i]``) let a backfilled journey — applied, interviewed,
+    accepted … — be entered in one submission; the repo layer writes it as a
+    full event chain. Redirects to the new detail page."""
     errors: dict[str, str] = {}
     company_value = _clean(company)
     job_title_value = _clean(job_title)
@@ -258,6 +302,16 @@ async def create_application(
         errors["job_title"] = "Job title is required."
     applied_date = _parse_applied_on(applied_on, errors)
 
+    if len(history_status) != len(history_date):
+        history_entries: list[tuple[str, date]] = []
+        errors["history"] = "Each recorded step needs exactly one status and one date."
+    else:
+        history_entries, history_problems = _parse_history_pairs(
+            history_status, history_date
+        )
+        if history_problems:
+            errors["history"] = "; ".join(history_problems)
+
     values = {  # echoed back so a failed submission keeps the user's input
         "company": company_value or "",
         "job_title": job_title_value or "",
@@ -265,6 +319,12 @@ async def create_application(
         "applied_on": applied_on.strip(),
         "job_posting_url": _clean(job_posting_url) or "",
         "notes": (notes or "").strip(),
+        # Echo every row exactly as submitted so a failed validation keeps
+        # the whole journey; one empty pair when nothing was recorded.
+        "history": [
+            (status_raw.strip(), date_raw.strip())
+            for status_raw, date_raw in zip(history_status, history_date)
+        ] or [("", "")],
     }
 
     if errors:  # don't even read the file parts when the form is invalid
@@ -277,15 +337,22 @@ async def create_application(
 
     with open_session() as session:
         # The row goes in first so uploads have a stable <id> directory.
-        application = repo.create_application(
-            session,
-            company=company_value,
-            job_title=job_title_value,
-            applied_on=applied_date,
-            reference_number=_clean(reference_number),
-            job_posting_url=_clean(job_posting_url),
-            notes=_clean(notes),
-        )
+        try:
+            application = repo.create_application(
+                session,
+                company=company_value,
+                job_title=job_title_value,
+                applied_on=applied_date,
+                reference_number=_clean(reference_number),
+                job_posting_url=_clean(job_posting_url),
+                notes=_clean(notes),
+                history=history_entries,
+            )
+        except ValueError as exc:
+            # Semantic history problems (wrong order, duplicate steps) surface
+            # here; no files have been written yet at this point.
+            errors["history"] = str(exc)
+            return templates.TemplateResponse(request, "new.html", _new_context(values, errors))
         metadata: dict[str, str] = {}
         failed_field = None
         for kind in files:  # only the kinds that were actually uploaded

@@ -89,7 +89,53 @@ def test_create_writes_exactly_one_initial_event(session):
     assert event.application_id == app.id
     assert event.from_status is None  # no previous status at creation time
     assert event.to_status == "received"
-    assert event.changed_at is not None
+    # Stamped with the applied date (UTC midnight), not the wall clock.
+    assert event.changed_at.date() == date(2026, 9, 1)
+
+
+def test_create_with_history_writes_full_chain_and_final_status(session):
+    app = _make(
+        session,
+        history=[("interviewing", date(2026, 9, 5)), ("accepted", date(2026, 9, 20))],
+    )
+    events = _events(session, app.id)
+
+    assert [
+        (e.from_status, e.to_status, e.changed_at.date()) for e in events
+    ] == [
+        (None, "received", date(2026, 9, 1)),
+        ("received", "interviewing", date(2026, 9, 5)),
+        ("interviewing", "accepted", date(2026, 9, 20)),
+    ]
+    assert app.status == "accepted"
+
+
+def test_create_history_out_of_order_is_sorted_by_date(session):
+    app = _make(
+        session,
+        history=[("accepted", date(2026, 9, 20)), ("interviewing", date(2026, 9, 5))],
+    )
+    events = _events(session, app.id)
+    assert [e.to_status for e in events] == ["received", "interviewing", "accepted"]
+
+
+def test_create_history_rejects_change_before_applied_date(session):
+    with pytest.raises(ValueError, match="predates the application date"):
+        _make(
+            session,
+            history=[("interviewing", date(2026, 8, 30))],
+        )
+
+
+def test_create_history_rejects_consecutive_duplicate_status(session):
+    with pytest.raises(ValueError, match="twice in a row"):
+        _make(
+            session,
+            history=[
+                ("interviewing", date(2026, 9, 5)),
+                ("interviewing", date(2026, 9, 6)),
+            ],
+        )
 
 
 def test_create_rejects_non_received_initial_status(session):

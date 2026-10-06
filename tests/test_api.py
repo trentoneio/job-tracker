@@ -113,6 +113,38 @@ def test_create_redirects_to_detail_and_starts_received(client):
         assert text in page.text
 
 
+def test_create_with_recorded_history_writes_full_chain(client):
+    response = _create(
+        client,
+        applied_on="2026-09-01",
+        history_status=["interviewing", "accepted"],
+        history_date=["2026-09-05", "2026-09-12"],
+    )
+    application_id = _created_id(response)
+
+    with open_session() as session:
+        row = repo.get_application(session, application_id)
+        chain = [
+            (e.from_status, e.to_status, e.changed_at.date())
+            for e in repo.get_status_events(session, application_id)
+        ]
+    assert row.status == "accepted"  # final step wins
+    assert chain == [
+        (None, "received", date(2026, 9, 1)),
+        ("received", "interviewing", date(2026, 9, 5)),
+        ("interviewing", "accepted", date(2026, 9, 12)),
+    ]
+
+
+def test_create_with_malformed_history_renders_error_and_creates_nothing(client):
+    # A step with a status but no date is rejected before anything is written.
+    response = _create(client, history_status=["interviewing"], history_date=[""])
+    assert response.status_code == 200
+    assert "needs both a status and a date" in response.text
+    home = client.get("/")
+    assert "No applications yet" in home.text
+
+
 def test_index_lists_all_applications(client):
     home = client.get("/")
     assert home.status_code == 200

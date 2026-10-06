@@ -16,6 +16,9 @@ SQLite database plus an upload folder is the entire state of the app.
   immutable timeline you can replay on the detail page. You can also enter the
   date a change actually happened (backdating is allowed; future dates are
   rejected), so a remembered update lands where it belongs in the timeline.
+  When creating an application you can record the whole journey at once —
+  applied, interviewed, accepted, whatever already happened — and each step
+  becomes its own dated event.
 - **Automatic ghosting.** Applications that sit at `received` for more than
   180 days without any update are moved to `ghosted` automatically, with an
   event recording when the sweep ran. The threshold is configurable via the

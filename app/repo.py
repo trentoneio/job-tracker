@@ -12,7 +12,7 @@ Conventions:
   ``expire_on_commit=False``), safe to read after the session closes.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Optional
 
@@ -23,6 +23,16 @@ from app.config import GHOST_AFTER_DAYS, STATUSES
 from app.models import Application, StatusEvent, utc_now
 
 _MISSING = object()
+
+
+def _midnight_utc(day: date) -> datetime:
+    """UTC midnight of *day* — the stamp used for manually-entered dates.
+
+    Storing whole days at a fixed instant keeps timelines, sorting and CSV
+    output identical no matter when (or from which timezone) the data was
+    keyed in; backfilled history reads exactly like live entries do.
+    """
+    return datetime.combine(day, time.min).replace(tzinfo=timezone.utc)
 
 
 def create_application(
@@ -39,11 +49,18 @@ def create_application(
     application_pdf: Optional[str] = None,
     resume_file_name: Optional[str] = None,
     application_file_name: Optional[str] = None,
+    history: Sequence[tuple[str, date]] = (),
 ) -> Application:
-    """Insert a new application and its single initial status event.
+    """Insert a new application and its status-event timeline.
 
     Every application starts at ``received`` no matter what is passed in:
-    the row and the ``NULL → received`` event are written in one transaction.
+    the row and the ``NULL → received`` event are written in one transaction,
+    stamped with UTC midnight of ``applied_on`` (not now) so backfilled
+    applications keep their true dates. ``history`` optionally records the
+    journey that already happened: each entry is a ``(status, change_date)``
+    pair applied in date order (same-day entries keep input order), producing
+    one event per step and ending at the final status.
+
     The ``status`` parameter exists so the create form can pass its input
     through unchanged; it is deliberately ignored here rather than asserted on,
     keeping this layer tolerant of later UI evolution.
@@ -56,12 +73,31 @@ def create_application(
             f"new applications always start at 'received', got {status!r}"
         )
 
+    # Validate and order the recorded history before touching the database.
+    ordered_history = sorted(history, key=lambda entry: entry[1])
+    previous_status = "received"
+    for change_status, change_date in ordered_history:
+        if change_status not in STATUSES:
+            raise ValueError(f"unknown recorded status {change_status!r}")
+        if change_date < applied_on:
+            raise ValueError(
+                f"a recorded status change on {change_date.isoformat()} "
+                f"predates the application date ({applied_on.isoformat()})"
+            )
+        if change_status == previous_status:
+            raise ValueError(
+                f"recorded history lists '{previous_status}' twice in a row; "
+                "each step must change to a different status"
+            )
+        previous_status = change_status
+
     application = Application(
         company=company,
         job_title=job_title,
         applied_on=applied_on,
         reference_number=reference_number,
-        status="received",
+        # 'received' unless the recorded history already walked further.
+        status=previous_status,
         job_posting_url=job_posting_url,
         notes=notes,
         resume_pdf=resume_pdf,
@@ -72,8 +108,15 @@ def create_application(
     session.add(application)
     session.flush()  # obtain the id for the FK below; same transaction
 
-    session.add(
-        StatusEvent(application_id=application.id, from_status=None, to_status="received")
+    steps = [("received", applied_on)] + list(ordered_history)
+    session.add_all(
+        StatusEvent(
+            application_id=application.id,
+            from_status=None if index == 0 else steps[index - 1][0],
+            to_status=step_status,
+            changed_at=_midnight_utc(step_date),
+        )
+        for index, (step_status, step_date) in enumerate(steps)
     )
     session.commit()
     return application
