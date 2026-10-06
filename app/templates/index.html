@@ -105,6 +105,9 @@
   <section class="panel" aria-labelledby="sankey-title">
     <h2 id="sankey-title" class="section-title">Status flow</h2>
     <div id="sankey-chart" class="chart"></div>
+    {% if stats.waiting %}
+      <p class="hint">{{ stats.waiting }} application{{ "s" if stats.waiting != 1 else "" }} still waiting on an employer — they flow into the “waiting” node.</p>
+    {% endif %}
   </section>
 
   {# Current status distribution for the slice (§6 item 6). #}

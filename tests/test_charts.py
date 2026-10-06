@@ -1,12 +1,12 @@
-"""Chart payload tests (PLAN.md §6 items 5–6): the server-computed Sankey and
-pie data behind each dashboard render, not the rendered pixels.
+"""Chart payload tests: the server-computed Sankey and pie data behind each
+dashboard render, not the rendered pixels.
 
 The fixture builds known transition histories across several companies,
 statuses and applied dates through repo + pinned event timestamps (same
 pattern as ``tests/test_dashboard.py::_seed_dashboard``); then we assert both
 the JSON embedded in ``GET /`` responses and the pure analytics functions
 across a matrix of filter combinations — the same slice predicate that drives
-every other widget (§6 item 2)."""
+every other widget."""
 
 import json
 import re
@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from app import analytics, config, db, repo
 from app.db import open_session
 from app.main import create_app
-from app.models import StatusEvent, utc_now
+from app.models import Application, StatusEvent, utc_now
 
 
 @pytest.fixture()
@@ -113,27 +113,33 @@ def _payload(page: str, tag_id: str) -> dict:
 
 
 def _check_sankey(payload: dict) -> None:
-    """Structural invariants every Sankey payload must satisfy (§4.1/§6 item 5)."""
+    """Structural invariants every Sankey payload must satisfy."""
     names = [node["name"] for node in payload["nodes"]]
     assert len(names) == len(set(names)), "duplicate nodes"
+    # The synthetic waiting sink, when present, is the last node and never a
+    # source: applications flow into it while they are still open.
+    if "waiting" in names:
+        assert names[-1] == "waiting"
     for link in payload["links"]:
         assert set(link) == {"source", "target", "value"}
         assert link["source"] in names and link["target"] in names
         assert link["source"] != link["target"], "no self-transitions are possible"
         assert isinstance(link["value"], int) and link["value"] >= 1
-        # Terminal statuses have no outflow by construction (§4.1).
+        # Terminal statuses have no outflow by construction.
         assert link["source"] not in ("accepted", "rejected", "ghosted")
+        # The waiting sink has no outflow of its own either.
+        assert link["source"] != "waiting"
 
 
 def _check_pie(payload: dict) -> None:
-    """Structural invariants every pie payload must satisfy (§6 item 6)."""
+    """Structural invariants every pie payload must satisfy."""
     assert set(payload) == {"total", "slices"}
     assert payload["total"] == sum(s["count"] for s in payload["slices"])
     assert len({s["status"] for s in payload["slices"]}) == len(payload["slices"])
 
 
 # ---------------------------------------------------------------------------
-# embedding + wiring (the server side of §6 items 5–6)
+# embedding + wiring (the server side of the dashboard charts)
 # ---------------------------------------------------------------------------
 
 def test_dashboard_embeds_chart_payloads_and_vendors_echarts(client):
@@ -150,7 +156,7 @@ def test_dashboard_embeds_chart_payloads_and_vendors_echarts(client):
     assert 'id="sankey-chart" class="chart"' in page
     assert 'id="pie-chart" class="chart"' in page
 
-    # ECharts is vendored locally (§3) and the head registers one shared swap
+    # ECharts is vendored locally and the head registers one shared swap
     # listener (it lives in <head>, so body swaps never re-run or stack it).
     assert "/static/vendor/echarts.min.js" in page
     assert "htmx:afterSwap" in page
@@ -166,17 +172,22 @@ def test_unfiltered_sankey_and_pie(client):
 
     sankey = _payload(page, "sankey-data")
     _check_sankey(sankey)
-    # Nodes follow the §4.1 vocabulary order; ghosted never occurred here.
+    # Nodes follow the status vocabulary order, with the synthetic waiting
+    # node last; ghosted never occurred here.
     assert [n["name"] for n in sankey["nodes"]] == [
-        "received", "interviewing", "offer", "accepted", "rejected",
+        "received", "interviewing", "offer", "accepted", "rejected", "waiting",
     ]
     # One count per application per distinct transition:
     # received→interviewing was taken by A and D; offer→accepted by A and E.
+    # C (still received) and D (still interviewing) flow into waiting instead
+    # of vanishing off the right edge.
     assert sankey["links"] == [
         {"source": "received", "target": "interviewing", "value": 2},
         {"source": "received", "target": "offer", "value": 1},
         {"source": "received", "target": "rejected", "value": 1},
+        {"source": "received", "target": "waiting", "value": 1},
         {"source": "interviewing", "target": "offer", "value": 1},
+        {"source": "interviewing", "target": "waiting", "value": 1},
         {"source": "offer", "target": "accepted", "value": 2},
     ]
 
@@ -196,7 +207,7 @@ def test_unfiltered_sankey_and_pie(client):
 
 
 # ---------------------------------------------------------------------------
-# filters slice both charts with the same predicate (§6 item 2)
+# filters slice both charts with the same predicate
 # ---------------------------------------------------------------------------
 
 def test_company_filter_slices_charts(client):
@@ -232,14 +243,16 @@ def test_status_filter_slices_charts(client):
 
     sankey = _payload(page, "sankey-data")
     _check_sankey(sankey)
-    assert [n["name"] for n in sankey["nodes"]] == [
-        "received", "interviewing", "offer", "accepted",
-    ]
     # D's only transition plus A and E's full histories; no rejected branch.
+    # D is still at interviewing, so it also flows into the waiting node.
+    assert [n["name"] for n in sankey["nodes"]] == [
+        "received", "interviewing", "offer", "accepted", "waiting",
+    ]
     assert sankey["links"] == [
         {"source": "received", "target": "interviewing", "value": 2},
         {"source": "received", "target": "offer", "value": 1},
         {"source": "interviewing", "target": "offer", "value": 1},
+        {"source": "interviewing", "target": "waiting", "value": 1},
         {"source": "offer", "target": "accepted", "value": 2},
     ]
 
@@ -261,9 +274,14 @@ def test_date_filter_slices_charts(client):
     page = client.get(f"/?date_from={date_from}&date_to={date_to}").text
     sankey = _payload(page, "sankey-data")
     _check_sankey(sankey)
-    assert [n["name"] for n in sankey["nodes"]] == ["received", "interviewing"]
+    # Both applications are still open, so each flows into the waiting node.
+    assert [n["name"] for n in sankey["nodes"]] == [
+        "received", "interviewing", "waiting",
+    ]
     assert sankey["links"] == [
         {"source": "received", "target": "interviewing", "value": 1},
+        {"source": "received", "target": "waiting", "value": 1},
+        {"source": "interviewing", "target": "waiting", "value": 1},
     ]
 
     pie = _payload(page, "pie-data")
@@ -286,14 +304,18 @@ def test_empty_slice_yields_empty_payloads(client):
     assert pie == {"total": 0, "slices": []}
 
 
-def test_no_transitions_slice_keeps_node_but_has_no_links(client):
+def test_single_open_application_flows_into_waiting(client):
     _seed_charts(client)
     page = client.get("/?status=received").text  # C only — never moved
 
     sankey = _payload(page, "sankey-data")
     _check_sankey(sankey)
-    assert [n["name"] for n in sankey["nodes"]] == ["received"]
-    assert sankey["links"] == []  # client renders "No status changes yet."
+    # No real transitions yet — but C is still open at received, so it shows
+    # up on the output side via the waiting node instead of disappearing.
+    assert [n["name"] for n in sankey["nodes"]] == ["received", "waiting"]
+    assert sankey["links"] == [
+        {"source": "received", "target": "waiting", "value": 1},
+    ]
 
     pie = _payload(page, "pie-data")
     assert pie == {
@@ -326,10 +348,13 @@ def test_sankey_counts_each_application_once_per_transition(client):
     values = {(l["source"], l["target"]): l["value"] for l in sankey["links"]}
     assert values[("received", "interviewing")] == 3  # A, D and F — not 4
     assert values[("interviewing", "received")] == 1  # only F's edit back
+    # Waiting sink: C is open at received; D and F are both open at interviewing.
+    assert values[("received", "waiting")] == 1
+    assert values[("interviewing", "waiting")] == 2
 
 
 def test_pure_payloads_on_empty_inputs():
-    assert analytics.sankey_payload([]) == {"nodes": [], "links": []}
+    assert analytics.sankey_payload([], []) == {"nodes": [], "links": []}
     assert analytics.pie_payload([]) == {"total": 0, "slices": []}
 
 
@@ -340,10 +365,91 @@ def test_pure_initial_event_contributes_node_only():
         to_status="received",
         changed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
-    assert analytics.sankey_payload([event]) == {
+    # With no applications passed there is nothing open, so the initial event
+    # yields a node but no links — its waiting flow comes from the application's
+    # current status when that list is provided (next test).
+    assert analytics.sankey_payload([], [event]) == {
         "nodes": [{"name": "received"}],
         "links": [],
     }
+
+
+def _pure_application(status: str) -> Application:
+    return Application(
+        company="Acme", job_title="Eng", applied_on=date(2026, 7, 1), status=status
+    )
+
+
+def test_pure_waiting_sink_counts_open_applications_once_each():
+    """Every open application contributes exactly one link from its current
+    status into the waiting node; terminal applications contribute none."""
+    def event(event_id: int, app_id: int, frm: str | None, to: str) -> StatusEvent:
+        return StatusEvent(
+            id=event_id,
+            application_id=app_id,
+            from_status=frm,
+            to_status=to,
+            changed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+    applications = [
+        _pure_application("received"),     # never moved
+        _pure_application("interviewing"),  # open at interviewing
+        _pure_application("offer"),         # open at offer
+        _pure_application("accepted"),      # terminal: no waiting link
+    ]
+    events = [
+        event(1, 1, None, "received"),
+        event(2, 2, None, "received"),
+        event(3, 2, "received", "interviewing"),
+        event(4, 3, None, "received"),
+        event(5, 3, "received", "offer"),
+        event(6, 4, None, "received"),
+        event(7, 4, "received", "accepted"),
+    ]
+
+    payload = analytics.sankey_payload(applications, events)
+    assert [n["name"] for n in payload["nodes"]] == [
+        "received", "interviewing", "offer", "accepted", "waiting",
+    ]
+    values = {(l["source"], l["target"]): l["value"] for l in payload["links"]}
+    assert values[("received", "interviewing")] == 1
+    assert values[("received", "offer")] == 1
+    assert values[("received", "accepted")] == 1
+    # One waiting link per open application, none from the terminal one.
+    assert values[("received", "waiting")] == 1
+    assert values[("interviewing", "waiting")] == 1
+    assert values[("offer", "waiting")] == 1
+    assert ("accepted", "waiting") not in values
+
+
+def test_pure_no_open_applications_means_no_waiting_node():
+    """When every application is terminal, the waiting node never appears."""
+    def event(event_id: int, app_id: int, frm: str | None, to: str) -> StatusEvent:
+        return StatusEvent(
+            id=event_id,
+            application_id=app_id,
+            from_status=frm,
+            to_status=to,
+            changed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+    applications = [
+        _pure_application("accepted"),
+        Application(company="B", job_title="PM", applied_on=date(2026, 7, 1), status="rejected"),
+    ]
+    events = [
+        event(1, 1, None, "received"),
+        event(2, 1, "received", "accepted"),
+        event(3, 2, None, "received"),
+        event(4, 2, "received", "rejected"),
+    ]
+
+    payload = analytics.sankey_payload(applications, events)
+    names = [n["name"] for n in payload["nodes"]]
+    assert "waiting" not in names
+    values = {(l["source"], l["target"]): l["value"] for l in payload["links"]}
+    assert values == {("received", "accepted"): 1, ("received", "rejected"): 1}
 
 
 def test_pure_sankey_dedupes_within_one_application():
@@ -361,6 +467,9 @@ def test_pure_sankey_dedupes_within_one_application():
         event(2, None, "received"),
         event(2, "received", "interviewing"),
     ]
-    payload = analytics.sankey_payload(events)
+    # No applications are passed, so there is no waiting node either.
+    payload = analytics.sankey_payload([], events)
+    names = [l["source"] for l in payload["links"]] + [l["target"] for l in payload["links"]]
+    assert "waiting" not in names
     values = {(l["source"], l["target"]): l["value"] for l in payload["links"]}
     assert values == {("received", "interviewing"): 2, ("interviewing", "received"): 1}

@@ -140,9 +140,10 @@ def index(
         )
 
     today = utc_now().date()
-    # Chart payloads for the filtered slice (§6 items 5–6), serialized once so
-    # the template can embed them verbatim inside <script> tags.
-    sankey_payload = analytics.sankey_payload(events)
+    # Chart payloads for the filtered slice, serialized once so the template
+    # can embed them verbatim inside <script> tags. The Sankey needs both the
+    # current statuses (for the waiting sink) and the full event history.
+    sankey_payload = analytics.sankey_payload(applications, events)
     pie_payload = analytics.pie_payload(applications)
     waiting_rows = dashboard.waiting_queue(applications, today)
     total = len(applications)
@@ -188,8 +189,7 @@ def index(
         # Header export links with the active filters (§5).
         "export_csv_url": _export_url("/api/export.csv"),
         "export_events_url": _export_url("/api/events.csv"),
-        # Distinct companies within the current slice — same predicate as
-        # every widget below (PLAN.md §6 item 2).
+        # Distinct companies within the current slice, same predicate as every other widget.
         "companies": sorted({app.company for app in applications}),
         "statuses": config.STATUSES,
         "status_colors": config.STATUS_COLORS,
