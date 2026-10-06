@@ -113,7 +113,7 @@
   {# The full lifecycle from status_events — the source of truth. Every step is
      inline-editable so a mis-keyed date or intermediate status can be fixed in
      place instead of deleting and recreating the application. #}
-  <h2>Status timeline</h2>
+  <h2>Status Timeline</h2>
   {% if errors.timeline %}<p class="field-error">{{ errors.timeline }}</p>{% endif %}
   <ol class="timeline">
     {% for event in events %}

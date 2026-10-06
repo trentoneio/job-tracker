@@ -74,7 +74,7 @@
   {# Waiting queue — the headline widget: who has been silent
      longest. Rows open the detail page on click (see base.html). #}
   <section class="panel" aria-labelledby="waiting-title">
-    <h2 id="waiting-title" class="section-title">Waiting on employer</h2>
+    <h2 id="waiting-title" class="section-title">Waiting On Employer</h2>
     {% if waiting %}
       <table class="table">
         <thead>
@@ -104,7 +104,7 @@
      status_events. The payload is embedded further down; the chart controller
      in base.html renders it into #sankey-chart and re-renders on every swap. #}
   <section class="panel" aria-labelledby="sankey-title">
-    <h2 id="sankey-title" class="section-title">Status flow</h2>
+    <h2 id="sankey-title" class="section-title">Status Flow</h2>
     <div id="sankey-chart" class="chart"></div>
     {% if stats.waiting %}
       <p class="hint">{{ stats.waiting }} application{{ "s" if stats.waiting != 1 else "" }} still waiting on an employer — they flow into the “waiting” node.</p>
@@ -113,13 +113,13 @@
 
   {# Current status distribution for the slice. #}
   <section class="panel" aria-labelledby="pie-title">
-    <h2 id="pie-title" class="section-title">Current status</h2>
+    <h2 id="pie-title" class="section-title">Current Status</h2>
     <div id="pie-chart" class="chart"></div>
   </section>
 
   {# Every application in the current slice. #}
   <section class="panel" aria-labelledby="all-title">
-    <h2 id="all-title" class="section-title">All applications</h2>
+    <h2 id="all-title" class="section-title">All Applications</h2>
     {% if applications %}
       <table class="table">
         <thead>
