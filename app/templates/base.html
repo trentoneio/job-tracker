@@ -1,26 +1,44 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Job Application Tracker{% endblock %}</title>
+
+  {# Apply the saved theme before first paint so there is no flash of an
+     unthemed page. The choice lives on <html data-theme> (not in the body),
+     so HTMX swaps never lose it, and localStorage persists it across visits. #}
+  <script>
+    (function () {
+      var stored = null;
+      try { stored = window.localStorage.getItem("jt-theme"); } catch (err) {}
+      document.documentElement.dataset.theme = stored || "light";
+    })();
+  </script>
+
   {# HTMX and ECharts are vendored under /static/vendor — no CDN or runtime
-     internet dependency (§3). ECharts renders the dashboard's Sankey and pie
-     charts client-side from JSON embedded by each dashboard render (§6 items
-     5–6); it is loaded here on every page so that always holds. #}
+     internet dependency. ECharts renders the dashboard's Sankey and pie
+     charts client-side from JSON embedded by each dashboard render; it is
+     loaded here on every page so that always holds. #}
   <script src="/static/vendor/htmx.min.js"></script>
   <script src="/static/vendor/echarts.min.js"></script>
 
-  {# Chart controller (§6 items 5–6). Registered once on document — it lives in
-     the head, so HTMX body swaps never re-run or stack it. Each dashboard render
-     embeds its payloads as JSON script tags; on initial load (DOMContentLoaded)
-     and after every HTMX swap (htmx:afterSwap) we dispose any previous chart
-     instances and re-render from the fresh data, so repeated filter submits
-     never duplicate canvases or show stale flows. Pages without charts no-op #}
+  {# Chart controller. Registered once on document — it lives in the head, so
+     HTMX body swaps never re-run or stack it. Each dashboard render embeds its
+     payloads as JSON script tags; on initial load (DOMContentLoaded), after
+     every HTMX swap (htmx:afterSwap) and whenever the theme changes we dispose
+     any previous chart instances and re-render from the fresh data, so repeated
+     filter submits never duplicate canvases or show stale flows. Pages without
+     charts no-op. Text/line colors are read from CSS variables at render time,
+     so charts follow the active theme. #}
   <script>
     (function () {
       var sankeyChart = null;
       var pieChart = null;
+
+      function cssVar(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
 
       function dispose(chart) {
         if (chart && !chart.isDisposed()) chart.dispose();
@@ -49,6 +67,7 @@
         sankeyChart = echarts.init(element);
         sankeyChart.setOption({
           tooltip: {},
+          textStyle: { color: cssVar("--chart-text") || "#6b7280" },
           series: [{
             type: "sankey",
             data: payload.nodes,
@@ -67,13 +86,15 @@
         pieChart = echarts.init(element);
         pieChart.setOption({
           tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+          textStyle: { color: cssVar("--chart-text") || "#6b7280" },
           series: [{
             type: "pie",
             radius: ["38%", "68%"],
             data: payload.slices.map(function (slice) {
               return { name: slice.status, value: slice.count };
             }),
-            label: { formatter: "{b}: {c} ({d}%)" }
+            label: { formatter: "{b}: {c} ({d}%)" },
+            labelLine: { lineStyle: { color: cssVar("--chart-line") || "#d1d5db" } }
           }]
         });
       }
@@ -95,13 +116,16 @@
 
       document.addEventListener("htmx:afterSwap", renderCharts);
       document.addEventListener("DOMContentLoaded", renderCharts);
+      // Theme changes re-render so label/line colors follow the new palette.
+      document.addEventListener("jt:theme-change", renderCharts);
       window.addEventListener("resize", resizeCharts);
     })();
   </script>
+
   <script>
     // Dashboard table rows open the detail page on click; clicks on links or
-    // buttons inside a row keep their normal behavior (§6 item 7). The listener
-    // lives on document, so it survives HTMX whole-page swaps and reaches new rows.
+    // buttons inside a row keep their normal behavior. The listener lives on
+    // document, so it survives HTMX whole-page swaps and reaches new rows.
     document.addEventListener("click", function (event) {
       var target = event.target;
       if (!target || !target.closest) return;
@@ -110,25 +134,114 @@
       window.location.assign(row.getAttribute("data-href"));
     });
   </script>
+
+  {# Theme picker wiring. The <select> itself lives in the header (inside the
+     swapped body), but this script and its listeners live on document, so
+     every HTMX swap re-wires the fresh select without stacking handlers.
+     Applying a theme updates <html data-theme>, persists it to localStorage,
+     syncs the picker value, and fires the event the chart controller listens
+     for. #}
+  <script>
+    (function () {
+      var THEMES = ["light", "dark", "dracula", "nord", "gruvbox"];
+
+      function current() {
+        return document.documentElement.dataset.theme || "light";
+      }
+
+      function apply(theme, persist) {
+        if (THEMES.indexOf(theme) === -1) theme = "light";
+        document.documentElement.dataset.theme = theme;
+        if (persist !== false) {
+          try { window.localStorage.setItem("jt-theme", theme); } catch (err) {}
+        }
+        var select = document.getElementById("theme-select");
+        if (select && select.value !== theme) select.value = theme;
+        document.dispatchEvent(new CustomEvent("jt:theme-change"));
+      }
+
+      function wire() {
+        var select = document.getElementById("theme-select");
+        if (!select || select.dataset.jtWired === "1") return;
+        select.dataset.jtWired = "1";
+        select.value = current();
+        select.addEventListener("change", function () { apply(select.value); });
+      }
+
+      // First paint (head scripts run before the body parses), then again after
+      // every HTMX swap re-creates the header.
+      wire();
+      document.addEventListener("DOMContentLoaded", wire);
+      document.addEventListener("htmx:afterSwap", wire);
+    })();
+  </script>
+
   <style>
+    /* Theme palettes — one set of custom properties per <html data-theme>.
+       Every rule below references these, so switching themes is a single
+       attribute change (see the bootstrap script above). */
+    :root, [data-theme="light"] {
+      --bg: #f8fafc; --surface: #ffffff; --border: #e5e7eb; --border-strong: #d1d5db;
+      --row-border: #f1f5f9; --text: #111827; --muted: #6b7280; --text-soft: #374151;
+      --accent: #2563eb; --accent-hover: #1d4ed8; --btn-text: #ffffff; --link: #2563eb;
+      --chip-on-bg: #eff6ff; --row-hover: #f8fafc; --error: #dc2626;
+      --danger-border: #fecaca; --danger-bg: #fff5f5;
+      --chart-text: #6b7280; --chart-line: #d1d5db;
+    }
+    [data-theme="dark"] {
+      --bg: #0f172a; --surface: #1e293b; --border: #334155; --border-strong: #475569;
+      --row-border: #2c3a4f; --text: #e2e8f0; --muted: #94a3b8; --text-soft: #cbd5e1;
+      --accent: #2563eb; --accent-hover: #1d4ed8; --btn-text: #ffffff; --link: #60a5fa;
+      --chip-on-bg: #1f345e; --row-hover: #25324a; --error: #f87171;
+      --danger-border: rgba(248, 113, 113, .4); --danger-bg: rgba(248, 113, 113, .1);
+      --chart-text: #94a3b8; --chart-line: #475569;
+    }
+    [data-theme="dracula"] {
+      --bg: #282a36; --surface: #343746; --border: #44475a; --border-strong: #515468;
+      --row-border: #3b3e50; --text: #f8f8f2; --muted: #8f95bd; --text-soft: #bdc3dd;
+      --accent: #bd93f9; --accent-hover: #caa0ff; --btn-text: #ffffff; --link: #8be9fd;
+      --chip-on-bg: #484561; --row-hover: #3b3e50; --error: #ff5555;
+      --danger-border: rgba(255, 85, 85, .4); --danger-bg: rgba(255, 85, 85, .1);
+      --chart-text: #a3a8cc; --chart-line: #44475a;
+    }
+    [data-theme="nord"] {
+      --bg: #eceff4; --surface: #ffffff; --border: #d8dee9; --border-strong: #b6c0d4;
+      --row-border: #e9edf4; --text: #2e3440; --muted: #5e6a7f; --text-soft: #434c5e;
+      --accent: #268bd2; --accent-hover: #1f6fb0; --btn-text: #ffffff; --link: #268bd2;
+      --chip-on-bg: #e9f3fb; --row-hover: #f4f7fb; --error: #d6493f;
+      --danger-border: #fecaca; --danger-bg: #fff5f5;
+      --chart-text: #5e6a7f; --chart-line: #b6c0d4;
+    }
+    [data-theme="gruvbox"] {
+      --bg: #282828; --surface: #32302f; --border: #4e4a45; --border-strong: #696158;
+      --row-border: #3f3c38; --text: #ebdbb2; --muted: #a89984; --text-soft: #bdae93;
+      --accent: #fabd2f; --accent-hover: #e0af2b; --btn-text: #282828; --link: #b8bb26;
+      --chip-on-bg: #50452f; --row-hover: #403d39; --error: #fb4934;
+      --danger-border: rgba(251, 73, 52, .4); --danger-bg: rgba(204, 36, 23, .15);
+      --chart-text: #a89984; --chart-line: #675f56;
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f8fafc; color: #111827; line-height: 1.45; }
-    a { color: #2563eb; text-decoration: none; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.45; }
+    a { color: var(--link); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
-    /* Site header (§6 item 1) */
-    .site-header { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .8rem 1.5rem; background: #fff; border-bottom: 1px solid #e5e7eb; }
+    /* Site header */
+    .site-header { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .8rem 1.5rem; background: var(--surface); border-bottom: 1px solid var(--border); }
     .site-header h1 { margin: 0; font-size: 1.2rem; white-space: nowrap; }
     .site-header > h1 a { color: inherit; text-decoration: none; }
     .header-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 
+    /* Theme picker */
+    .theme-select { width: auto; padding: .42rem .55rem; border-radius: 8px; font-size: .9rem; border: 1px solid var(--border-strong); background: var(--surface); color: inherit; }
+
     /* Buttons */
     .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1rem; border-radius: 8px; border: 1px solid transparent; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
     .btn:hover { text-decoration: none; }
-    button[type="submit"], .btn-primary { background-color: #2563eb; color: #fff; border-color: #1d4ed8; }
-    button[type="submit"]:hover, .btn-primary:hover { background-color: #1d4ed8; }
-    .btn-ghost { background-color: #fff; color: #374151; border-color: #d1d5db; }
-    .btn-ghost:hover { background-color: #f9fafb; }
+    button[type="submit"], .btn-primary { background-color: var(--accent); color: var(--btn-text); border-color: var(--accent-hover); }
+    button[type="submit"]:hover, .btn-primary:hover { background-color: var(--accent-hover); }
+    .btn-ghost { background-color: var(--surface); color: var(--text-soft); border-color: var(--border-strong); }
+    .btn-ghost:hover { background-color: var(--bg); }
     .btn-danger { background-color: #dc2626; color: #fff; border-color: #b91c1c; }
     .btn-danger:hover { background-color: #b91c1c; }
 
@@ -138,75 +251,75 @@
     .section-title { margin-top: 0; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     .cell-links { white-space: nowrap; display: flex; gap: .8rem; justify-content: flex-end; }
-    .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
 
-    /* Filter bar (§6 item 2) */
-    .filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .9rem 1.15rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
+    /* Filter bar */
+    .filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .9rem 1.15rem; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
     .filter-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
-    .filter-label { font-size: .74rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }
-    .filter-bar select, .filter-bar input[type="date"] { padding: .42rem .55rem; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; background: #fff; color: inherit; width: auto; }
+    .filter-label { font-size: .74rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .filter-bar select, .filter-bar input[type="date"] { padding: .42rem .55rem; border: 1px solid var(--border-strong); border-radius: 8px; font: inherit; background: var(--surface); color: inherit; width: auto; }
     .chip-row { display: flex; flex-wrap: wrap; gap: .4rem; }
-    .chip { position: relative; display: inline-flex; align-items: center; padding: .32rem .8rem; border: 1px solid #d1d5db; border-radius: 999px; background: #fff; font-size: .86rem; color: #374151; cursor: pointer; user-select: none; }
+    .chip { position: relative; display: inline-flex; align-items: center; padding: .32rem .8rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); font-size: .86rem; color: var(--text-soft); cursor: pointer; user-select: none; }
     .chip input { position: absolute; opacity: 0; pointer-events: none; }
-    .chip:hover { border-color: #9ca3af; }
-    .chip:has(input:checked) { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; font-weight: 600; }
-    .chip:has(input:focus-visible) { outline: 2px solid #2563eb; outline-offset: 1px; }
+    .chip:hover { border-color: var(--muted); }
+    .chip:has(input:checked) { background: var(--chip-on-bg); border-color: var(--accent); color: var(--link); font-weight: 600; }
+    .chip:has(input:focus-visible) { outline: 2px solid var(--link); outline-offset: 1px; }
     .filter-actions { display: flex; align-items: center; gap: .6rem; margin-left: auto; }
 
-    /* Stat cards (§6 item 3) */
+    /* Stat cards */
     .stat-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .9rem; margin-bottom: 1.5rem; }
     @media (max-width: 62rem) { .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    .stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: .85rem 1.05rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .85rem 1.05rem; }
     .stat-value { font-size: 1.55rem; font-weight: 700; line-height: 1.2; }
-    .stat-label { display: block; margin-top: .25rem; font-size: .8rem; color: #6b7280; }
+    .stat-label { display: block; margin-top: .25rem; font-size: .8rem; color: var(--muted); }
 
     /* Tables */
     .table { width: 100%; border-collapse: collapse; }
-    .table th { text-align: left; padding: .5rem .6rem; font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
-    .table td { padding: .55rem .6rem; border-bottom: 1px solid #f1f5f9; font-size: .93rem; vertical-align: top; }
+    .table th { text-align: left; padding: .5rem .6rem; font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+    .table td { padding: .55rem .6rem; border-bottom: 1px solid var(--row-border); font-size: .93rem; vertical-align: top; }
     .table tbody tr:last-child td { border-bottom: none; }
     tr.row-link { cursor: pointer; }
-    tr.row-link:hover { background: #f8fafc; }
+    tr.row-link:hover { background: var(--row-hover); }
 
     /* Badges (colors come from app/config.py STATUS_COLORS) */
     .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; color: #fff; font-size: .78rem; font-weight: 600; white-space: nowrap; }
 
     /* Forms */
-    label { display: block; font-size: .86rem; font-weight: 500; margin-bottom: .3rem; color: #374151; }
-    input[type="text"], input[type="date"], input[type="url"], select, textarea { width: 100%; padding: .5rem .65rem; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; background: #fff; color: inherit; }
-    input:focus, select:focus, textarea:focus { outline: 2px solid #93c5fd; outline-offset: 0; border-color: #2563eb; }
-    .hint { margin-top: .3rem; font-size: .8rem; color: #6b7280; }
+    label { display: block; font-size: .86rem; font-weight: 500; margin-bottom: .3rem; color: var(--text-soft); }
+    input[type="text"], input[type="date"], input[type="url"], select, textarea { width: 100%; padding: .5rem .65rem; border: 1px solid var(--border-strong); border-radius: 8px; font: inherit; background: var(--surface); color: inherit; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--link); outline-offset: 0; border-color: var(--link); }
+    .hint { margin-top: .3rem; font-size: .8rem; color: var(--muted); }
     textarea { min-height: 5.5rem; resize: vertical; }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1.1rem; }
     @media (max-width: 48rem) { .form-grid { grid-template-columns: 1fr; } }
     .form-full { grid-column: 1 / -1; }
-    .error-list { margin: 0 0 1rem; padding-left: 1.2rem; color: #dc2626; font-size: .9rem; }
-    .field-error { display: block; margin-top: .3rem; color: #dc2626; font-size: .85rem; }
+    .error-list { margin: 0 0 1rem; padding-left: 1.2rem; color: var(--error); font-size: .9rem; }
+    .field-error { display: block; margin-top: .3rem; color: var(--error); font-size: .85rem; }
 
     /* Detail page */
-    .detail-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
+    .detail-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1.4rem; }
     .detail-header h2 { margin: 0; font-size: 1.25rem; }
-    .meta { color: #6b7280; font-size: .92rem; }
+    .meta { color: var(--muted); font-size: .92rem; }
     .meta p { margin: .3rem 0; }
 
-    /* Status timeline (append-only history, §4) */
+    /* Status timeline (append-only history) */
     ol.timeline { list-style: none; margin: .5rem 0 0; padding: 0; }
-    ol.timeline li { display: flex; align-items: center; gap: .5rem; padding: .5rem 0; border-bottom: 1px dashed #e5e7eb; font-size: .92rem; }
+    ol.timeline li { display: flex; align-items: center; gap: .5rem; padding: .5rem 0; border-bottom: 1px dashed var(--border); font-size: .92rem; }
     ol.timeline li:last-child { border-bottom: none; }
-    ol.timeline time { color: #6b7280; font-variant-numeric: tabular-nums; min-width: 4.2rem; }
-    .timeline-initial { color: #9ca3af; font-size: .85rem; }
+    ol.timeline time { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4.2rem; }
+    .timeline-initial { color: var(--muted); font-size: .85rem; }
 
-    /* Charts (§6 items 5–6): fixed heights give ECharts a concrete canvas size.
-       The head controller renders into these and shows empty-state text inside */
+    /* Charts: fixed heights give ECharts a concrete canvas size. The head
+       controller renders into these and shows empty-state text inside */
     .chart { height: 21rem; }
 
     /* Empty states */
-    .empty-state { padding: .9rem .25rem; margin: 0; color: #6b7280; font-size: .95rem; }
+    .empty-state { padding: .9rem .25rem; margin: 0; color: var(--muted); font-size: .95rem; }
 
     /* Danger zone */
-    .danger-zone { border: 1px solid #fecaca; border-top: 3px solid #dc2626; background: #fff5f5; padding: 1.1rem; margin-top: 1.6rem; border-radius: 10px; }
+    .danger-zone { border: 1px solid var(--danger-border); border-top: 3px solid var(--error); background: var(--danger-bg); padding: 1.1rem; margin-top: 1.6rem; border-radius: 10px; }
     .actions { display: flex; gap: .7rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
-    .checkbox-line { font-weight: normal; color: #374151; display: inline-flex; align-items: center; gap: .45rem; }
+    .checkbox-line { font-weight: normal; color: var(--text-soft); display: inline-flex; align-items: center; gap: .45rem; }
     .checkbox-line input { width: auto; }
   </style>
 </head>
@@ -214,10 +327,18 @@
   <header class="site-header">
     <h1><a href="/">Job Application Tracker</a></h1>
     <nav class="header-actions">
+      {# Outside the block so pages that override header_actions keep it. #}
+      <select id="theme-select" class="theme-select" aria-label="Theme" title="Choose a theme">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="dracula">Dracula</option>
+        <option value="nord">Nord</option>
+        <option value="gruvbox">Gruvbox</option>
+      </select>
       {% block header_actions %}
         {# Export links carry the active filter query string from the dashboard
-           render (§5 "export what you're looking at"); pages that don't pass
-           them default to a full-dataset export. #}
+           render ("export what you're looking at"); pages that don't pass them
+           default to a full-dataset export. #}
         <a class="btn btn-ghost" href="{{ export_csv_url | default('/api/export.csv') }}">Export CSV</a>
         <a class="btn btn-ghost" href="{{ export_events_url | default('/api/events.csv') }}">Export history</a>
         <a class="btn btn-primary" href="/applications/new">+ New application</a>
