@@ -131,9 +131,74 @@ the waiting queue (matching the table and detail page), and the user-facing
 Everything is covered by temp-database test suites (`tests/test_data.py`,
 `tests/test_api.py`, `tests/test_dashboard.py`, `tests/test_charts.py`,
 `tests/test_export.py`).
-Remaining: session 6 (Docker / Pi deployment). See
-[PLAN.md](PLAN.md) §11 for the plan and [SESSION_LOG.md](SESSION_LOG.md) for
-what each session shipped.
+
+Session 6 packages it all for Raspberry Pi deployment (§7, §8): a hardened
+`Dockerfile` (multi-arch `python:3.12-slim`, pinned deps, a dedicated
+non-root `jobtracker` user that owns `/app/data`) plus an `entrypoint.py`
+that runs as root only long enough on first start to adopt the host's data
+directory, then drops privileges for good and execs uvicorn — the server
+process itself always shows in `ps`/`/proc` as non-root. The compose file
+(verifiable against §8: relative paths, `${PORT:-8090}`, `restart:
+unless-stopped`, stdlib `/healthz` probe) is unchanged from session 0, and a
+`.dockerignore` keeps personal data, venvs, tests and git history out of the
+build context. Verified end-to-end in a clean room: built from committed files
+only, healthy within ~30 s, an application created over HTTP with its PDFs
+landing in `./data`, all still present after a full stop/start.
+
+All sessions from [PLAN.md](PLAN.md) §11 are complete. See
+[SESSION_LOG.md](SESSION_LOG.md) for what each session shipped.
+
+## Deploy on a Raspberry Pi
+
+The whole app runs inside one Docker container (§7), and this repository is
+everything you need. The `python:3.12-slim` base image is multi-arch, so there
+is no cross-compilation — you build natively on the Pi (arm64):
+
+```bash
+# 1. Get the code onto the Pi (git clone, or copy the folder over SSH/USB)
+cd job-tracker
+
+# 2. Build and start — first build takes a few minutes on the Pi
+docker compose up -d --build
+```
+
+3. Open `http://<pi-ip>:8090` from any device on your network — phone,
+laptop, whatever. For a stable address instead of the raw IP, reserve the
+Pi's address in your router's DHCP settings (or use `raspberrypi.local` if
+mDNS works on your devices).
+
+Notes:
+
+- **Reboots:** the container comes back automatically after a Pi power cycle
+  (`restart: unless-stopped`). Stop it for maintenance with
+  `docker compose down`, then start it again with `docker compose up -d`.
+- **Different port?** The host-side port is overridable via environment:
+  `PORT=9000 docker compose up -d --build`. (The container always listens on
+  8000 internally; only the published port changes.)
+- **Data directory:** everything lives in `./data` at the repo root. On first
+  start, if Docker created that directory as root, the entrypoint adopts its
+  ownership before dropping to the non-root server user — nothing for you to
+  configure manually.
+
+### Backup and restore
+
+Everything you've recorded — every application row plus every uploaded PDF —
+is one directory: `./data` (`app.db`, its WAL sidecar files, and the
+`uploads/` tree). Backing up means copying that directory somewhere durable:
+
+```bash
+docker compose stop   # safest: no writes in flight while you copy
+cp -r data /path/to/somewhere-else/job-tracker-backup-$(date +%F)
+```
+
+Restoring is the reverse: put the backed-up contents back into `./data`, then
+`docker compose up -d`. (Copying a live database usually works fine thanks to
+SQLite's WAL mode, but stopping first guarantees a consistent snapshot.)
+
+Disk use stays small by design (§7): each application holds at most two PDFs,
+each capped at 15 MB, so even hundreds of applications occupy well under a
+gigabyte — trivial for an SD card. If you file many large scans, check up with
+`du -sh data/` now and then.
 
 ## Run tests
 
