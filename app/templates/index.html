@@ -123,7 +123,7 @@
     {% if applications %}
       <table class="table">
         <thead>
-          <tr><th>Company</th><th>Title</th><th>Ref</th><th>Applied</th><th>Status</th><th class="num">Days since applied</th><th></th></tr>
+          <tr><th>Company</th><th>Title</th><th>Ref</th><th>Applied</th><th>Status</th><th class="num">Days since applied</th><th class="num" title="Whole days since this application was last touched. Any edit resets it; received rows sitting idle past 180 days are auto-ghosted.">Days since updated</th><th></th></tr>
         </thead>
         <tbody>
           {% for app in applications %}
@@ -134,6 +134,7 @@
               <td>{{ app.applied_on.isoformat() }}</td>
               <td><span class="badge" style="background: {{ status_colors.get(app.status, '#6b7280') }}">{{ app.status }}</span></td>
               <td class="num">{{ (today - app.applied_on).days }}</td>
+              <td class="num">{% if (today - app.updated_at.date()).days == 0 %}today{% else %}{{ (today - app.updated_at.date()).days }}d{% endif %}</td>
               <td class="cell-links">
                 {% if app.resume_file_name %}<a href="/files/{{ app.id }}/resume">Resume</a>{% endif %}
                 {% if app.application_file_name %}<a href="/files/{{ app.id }}/application">PDF</a>{% endif %}

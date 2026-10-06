@@ -29,7 +29,9 @@ SQLite database plus an upload folder is the entire state of the app.
   first response), a waiting queue sorted by who has been silent longest, an
   ECharts Sankey of status flow, and a current-status pie chart. Applications
   that haven't reached a final status yet flow into a `waiting` node on the
-  Sankey, so open applications are visible instead of vanishing.
+  Sankey, so open applications are visible instead of vanishing. The All
+  Applications table also shows how many days each row has sat untouched —
+  any edit resets that counter.
 - **Filters.** By company, current status (multi-select chips), or applied-date
   range — every widget, queue, and table reshapes around the same slice.
 - **Export what you're looking at.** "Export CSV" downloads the applications on

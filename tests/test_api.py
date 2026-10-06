@@ -212,6 +212,20 @@ def test_timeline_rendered_with_inline_edit_forms(client):
     assert page.count("name=\"new_status\"") == 2  # only non-initial steps
 
 
+def test_index_shows_days_since_updated(client):
+    response = _create(client)
+    application_id = _created_id(response)
+
+    with open_session() as session:
+        row = repo.get_application(session, application_id)
+        row.updated_at = utc_now() - timedelta(days=5)  # backdate the last touch
+        session.commit()
+
+    home = client.get("/").text
+    assert "Days since updated" in home  # column header present
+    assert '<td class="num">5d</td>' in home  # rendered metric for that row
+
+
 def test_index_lists_all_applications(client):
     home = client.get("/")
     assert home.status_code == 200
