@@ -1,7 +1,7 @@
-"""Repository functions for the data layer (PLAN.md §4 rules).
+"""Repository functions for the data layer.
 
-Higher layers (API routes in S2, dashboard rendering in S3, CSV export in S5)
-call these instead of managing sessions themselves. Each function runs its
+Higher layers (the HTTP routes, the dashboard render, the CSV exports) call
+these instead of managing sessions themselves. Each function runs its
 work inside a single transaction and commits before returning.
 
 Conventions:
@@ -32,7 +32,7 @@ def create_application(
     job_title: str,
     applied_on: date,
     reference_number: Optional[str] = None,
-    status: Any = _MISSING,  # accepted-but-ignored per §4 (see docstring)
+    status: Any = _MISSING,  # accepted but ignored — see docstring
     job_posting_url: Optional[str] = None,
     notes: Optional[str] = None,
     resume_pdf: Optional[str] = None,
@@ -42,9 +42,9 @@ def create_application(
 ) -> Application:
     """Insert a new application and its single initial status event.
 
-    Every application starts at ``received`` no matter what is passed in (§4):
+    Every application starts at ``received`` no matter what is passed in:
     the row and the ``NULL → received`` event are written in one transaction.
-    The ``status`` parameter exists so S2's create form can pass its input
+    The ``status`` parameter exists so the create form can pass its input
     through unchanged; it is deliberately ignored here rather than asserted on,
     keeping this layer tolerant of later UI evolution.
     """
@@ -92,7 +92,7 @@ def _apply_filters(
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
 ):
-    """Shared filter predicate (§5: every parameter optional; empty = all).
+    """Shared filter predicate (every parameter optional; empty means all).
 
     * ``company`` — exact match.
     * ``statuses`` — current status in the given set; an empty/None iterable
@@ -125,7 +125,7 @@ def list_applications(
     """Return applications matching the (all-optional) filters.
 
     Ordered newest first by ``applied_on`` (id as tiebreaker), which is also the
-    dashboard's default sort (§5). No parameters / empty values return all
+    dashboard's default sort. No parameters / empty values return all
     applications, ordered identically.
     """
     query = select(Application)
@@ -156,8 +156,8 @@ def get_status_events_for_filter(
     Filter semantics are identical to :func:`list_applications` (predicate on
     current ``applications.status``); for every matching application its full
     event history is returned. Ordered deterministically by application id,
-    then timestamp — the exact input shape S4's Sankey builder and S5's
-    ``/api/events.csv`` consume.
+    then timestamp — the exact input shape the Sankey payload builder and the
+    ``/api/events.csv`` export consume.
     """
     query = select(StatusEvent).join(
         Application, StatusEvent.application_id == Application.id
@@ -175,7 +175,7 @@ def get_status_events_for_filter(
     )))
 
 
-# Columns without a default that may never be NULL (§4 schema).
+# Columns without a default that may never be NULL.
 _NON_NULLABLE_FIELDS = frozenset({"company", "job_title", "applied_on"})
 
 _UPDATABLE_FIELDS = frozenset({
@@ -203,10 +203,10 @@ def update_application(
     """Apply field edits to an existing application.
 
     * Omit a keyword argument to leave that column unchanged; passing ``None``
-      clears the column (so S2's forms can empty optional fields).
+      clears the column (so form edits can empty optional fields).
     * If ``status`` is provided and differs from the current value, exactly one
       event (old → new) is appended and ``applications.status`` mirrors it.
-      Setting the same status appends nothing (§4).
+      Setting the same status appends nothing.
     * ``status_changed_on`` optionally backdates that event's timestamp: a
       calendar day becomes midnight UTC on that date. It only applies when a
       real status change happens; otherwise (and with no value) events are
@@ -318,10 +318,11 @@ def auto_ghost_stale_received(
 
 
 def delete_application(session: Session, application_id: int) -> bool:
-    """Delete the application; its status events cascade away (§4).
+    """Delete the application; its status events cascade away with it.
 
     Returns ``True`` if a row was deleted. Removing the PDFs from
-    ``data/uploads/<id>/`` is S2's concern — this layer only owns rows.
+    ``<DATA_DIR>/uploads/<id>/`` belongs to the route handlers — this layer
+    only owns rows.
     """
     application = session.get(Application, application_id)
     if application is None:

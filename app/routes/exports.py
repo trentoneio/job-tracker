@@ -1,4 +1,4 @@
-"""CSV export endpoints (PLAN.md §5).
+"""CSV export endpoints.
 
 Both endpoints reuse the exact same shared filter predicate as the dashboard
 render — no separate filtering logic. No filters = full dataset ("export what
@@ -56,12 +56,12 @@ def export_applications_csv(
 ) -> Response:
     """Download the (filtered) applications as CSV.
 
-    Same filter params and semantics as ``GET /`` (§6 item 2), same shared
-    predicate as every dashboard widget (§5). Columns exactly per §5:
-    id, company, job_title, reference_number, applied_on, status,
-    job_posting_url, notes, resume filename, application filename,
-    created_at, updated_at. The two PDF columns carry the original filenames
-    stored in S2 (empty when nothing was uploaded).
+    Same filter params and semantics as ``GET /`` — this is "export what you're
+    looking at": no filters active means the full dataset. Columns: id,
+    company, job_title, reference_number, applied_on, status, job_posting_url,
+    notes, resume filename, application filename, created_at, updated_at.
+    The two PDF columns carry the original uploaded filenames (empty when
+    nothing was uploaded).
     """
     with open_session() as session:
         apps = list_applications(

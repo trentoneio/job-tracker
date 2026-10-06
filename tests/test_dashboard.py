@@ -1,10 +1,10 @@
-"""Dashboard tests (PLAN.md §6): states, filter slicing of every widget,
+"""Dashboard tests: empty/full states, filter slicing of every widget,
 waiting-queue ordering and stat-card values.
 
 Seeding goes through the repo (not the forms) and then pins every
 ``status_events.changed_at`` to an exact UTC instant so all day math is
 deterministic no matter when the suite runs. The live DATA_DIR is never
-touched (§7)."""
+touched."""
 
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -144,7 +144,7 @@ def test_empty_dashboard(client):
     assert _card(page, "Median days to first response") == "—"
     assert "No applications yet" in page
     assert "Nothing waiting right now." in page
-    # HTMX is vendored locally and the filter bar re-renders through it (§3/§6).
+    # HTMX is vendored locally, so no CDN fetch; the filter bar re-renders through it.
     assert "/static/vendor/htmx.min.js" in page
     assert 'hx-get="/"' in page and 'hx-target="body"' in page
 
@@ -174,7 +174,7 @@ def test_unfiltered_widgets_cover_all_data(client):
     assert _card(page, "Closed (terminal) rate") == "25%"
     assert _card(page, "Median days to first response") == "4"
 
-    # Waiting queue: most days since applied first (§6 item 4).
+    # Waiting queue: most days since applied first.
     queue = _queue_rows(page)
     assert [(row[0], row[2], row[3]) for row in queue] == [
         ("Acme Corp", "interviewing", "10"),
@@ -195,7 +195,7 @@ def test_unfiltered_widgets_cover_all_data(client):
 
 
 # ---------------------------------------------------------------------------
-# filters slice every widget with the same predicate (§6 item 2)
+# filters slice every widget with the same shared predicate
 # ---------------------------------------------------------------------------
 
 def test_company_filter_slices_every_widget(client):

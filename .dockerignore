@@ -1,4 +1,4 @@
-# Build-context hygiene (§8): the image only needs app/, requirements.txt and
+# Build-context hygiene: the image only needs app/, requirements.txt and
 # entrypoint.py. Keep live data (personal PDFs!), dev venvs, tests and git
 # history out of what Docker ships to its daemon on every build.
 .git/

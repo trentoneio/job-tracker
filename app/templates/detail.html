@@ -29,7 +29,7 @@
     <p><a href="/files/{{ application.id }}/application">{{ application.application_file_name }}</a></p>
   {% else %}<p>Application PDF: none uploaded.</p>{% endif %}
 
-  {# One inline form edits every field, including status (§5). #}
+  {# One inline form edits every field, including status. #}
   <h2>Edit</h2>
   <div class="panel">
     {% if errors %}
@@ -110,7 +110,7 @@
     </form>
   </div>
 
-  {# The full lifecycle from status_events — the source of truth (§4). #}
+  {# The full lifecycle from status_events — the append-only source of truth. #}
   <h2>Status timeline</h2>
   <ol class="timeline">
     {% for event in events %}

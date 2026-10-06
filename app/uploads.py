@@ -1,18 +1,18 @@
-"""PDF upload validation and on-disk storage (PLAN.md §7).
+"""PDF upload validation and on-disk storage.
 
 An application can carry two PDFs — ``resume`` and ``application``. Both are:
 
 * validated by extension (``.pdf``) **and** magic bytes (``%PDF`` prefix),
 * capped at ``config.MAX_UPLOAD_MB`` megabytes, checked before anything is
-  written to disk (§7),
+  written to disk,
 * stored under ``<DATA_DIR>/uploads/<application_id>/<kind>.pdf`` — stable
   paths so re-uploads can simply replace the file in place.
 
 Original file names never touch this module: the repository layer keeps them
 in ``applications.resume_file_name`` / ``applications.application_file_name``
-so downloads can use friendly names while storage stays predictable (§7).
+so downloads can use friendly names while storage stays predictable.
 This module owns every filesystem write for PDFs; ``app/repo.py`` deliberately
-does not touch disk (§4/§7 split).
+does not touch disk.
 
 The data directory is read from ``config.DATA_DIR`` at call time (not import
 time) so tests can point the whole app at a temp dir.
@@ -35,7 +35,7 @@ PDF_MAGIC_BYTES = b"%PDF"
 
 
 def max_upload_bytes() -> int:
-    """The current per-file size cap from config, in bytes (§7)."""
+    """The current per-file size cap from config, in bytes."""
     return config.MAX_UPLOAD_MB * 1024 * 1024
 
 
@@ -43,7 +43,7 @@ def validate_pdf(filename: str, content: bytes) -> None:
     """Raise :class:`UploadError` unless *content* is an acceptable PDF.
 
     Checks, in order: ``.pdf`` extension, size cap (before any disk write),
-    and the ``%PDF`` magic-byte prefix (§7).
+    and the ``%PDF`` magic-byte prefix.
     """
     if not filename.lower().endswith(".pdf"):
         raise UploadError(f"{filename} must be a PDF file (.pdf extension).")
@@ -82,7 +82,7 @@ def store_upload(
     """Validate *content* and write it to the stable storage path.
 
     Re-uploading for the same (application, kind) **replaces** the previous
-    file on disk (§7). Returns the DATA_DIR-relative path that gets stored in
+    file on disk. It returns the DATA_DIR-relative path that gets stored in
     the database (``uploads/<id>/<kind>.pdf``).
     """
     # Extension + magic bytes + size cap — always before any disk write.

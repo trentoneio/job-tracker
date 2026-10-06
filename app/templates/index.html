@@ -3,11 +3,12 @@
 {% block title %}Dashboard — Job Application Tracker{% endblock %}
 
 {% block content %}
-  {# Filter bar (§6 item 2). The form re-renders the whole page through GET /:
-     hx-target="body" + outerHTML swaps in <head> stays untouched (HTMX keeps its
-     own listener; document-level handlers survive), and hx-push-url keeps the
-     browser URL equal to this exact query string — the one S5's CSV endpoints
-     will consume. Without JS the same GET works as a plain form submission. #}
+  {# Filter bar: the form re-renders the whole page through GET /
+     (hx-target="body" + outerHTML leaves <head> untouched — HTMX keeps its own
+     listener, document-level handlers survive), and hx-push-url keeps the
+     browser URL equal to this exact query string — the one the CSV export
+     endpoints consume too. Without JS the same GET works as a plain form
+     submission. #}
   <form class="filter-bar" method="get" action="/"
         hx-get="/" hx-target="body" hx-swap="outerHTML" hx-push-url="true">
 
@@ -50,7 +51,7 @@
     </div>
   </form>
 
-  {# Stat cards (§6 item 3) — computed over the exact filtered slice. #}
+  {# Stat cards, computed over the exact filtered slice. #}
   <section class="stat-cards" aria-label="Summary statistics for the current filter">
     <div class="stat-card">
       <span class="stat-value">{{ stats.total }}</span>
@@ -70,7 +71,7 @@
     </div>
   </section>
 
-  {# Waiting queue — the headline widget (§6 item 4): who has been silent
+  {# Waiting queue — the headline widget: who has been silent
      longest. Rows open the detail page on click (see base.html). #}
   <section class="panel" aria-labelledby="waiting-title">
     <h2 id="waiting-title" class="section-title">Waiting on employer</h2>
@@ -99,7 +100,7 @@
     {% endif %}
   </section>
 
-  {# Status flow (§6 item 5): where each cohort in the slice went, from
+  {# Status flow: where each cohort in the slice went, from
      status_events. The payload is embedded further down; the chart controller
      in base.html renders it into #sankey-chart and re-renders on every swap. #}
   <section class="panel" aria-labelledby="sankey-title">
@@ -110,13 +111,13 @@
     {% endif %}
   </section>
 
-  {# Current status distribution for the slice (§6 item 6). #}
+  {# Current status distribution for the slice. #}
   <section class="panel" aria-labelledby="pie-title">
     <h2 id="pie-title" class="section-title">Current status</h2>
     <div id="pie-chart" class="chart"></div>
   </section>
 
-  {# Everything in the current slice (§6 item 7). #}
+  {# Every application in the current slice. #}
   <section class="panel" aria-labelledby="all-title">
     <h2 id="all-title" class="section-title">All applications</h2>
     {% if applications %}
@@ -148,7 +149,7 @@
     {% endif %}
   </section>
 
-  {# Chart payloads for the two sections above (§6 items 5–6), one per render.
+  {# Chart payloads for the two sections above, one per render.
      Only fixed-vocabulary status names and numbers are ever embedded, so no
      HTML escaping is needed inside the script tags. #}
   <script type="application/json" id="sankey-data">{{ sankey_json | safe }}</script>

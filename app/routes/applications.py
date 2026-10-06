@@ -1,12 +1,12 @@
-"""Server-rendered application routes (PLAN.md §5/§6).
+"""Server-rendered application routes.
 
 Create / detail / inline edit+status change / delete, plus multipart PDF
-uploads. Forms post to real endpoints and redirect after success (§5);
-validation problems re-render the same form with inline messages — there is
-no JSON API in this layer. New applications always start at ``received``;
-the create form has no status field (§4).
+uploads. Forms post to real endpoints and redirect after success; validation
+problems re-render the same form with inline messages — there is no JSON API
+in this layer. New applications always start at ``received``; the create form
+has no status field.
 
-Layering follows §4: request handlers only call repo functions through
+Layering: request handlers only call repo functions through
 ``open_session()``; PDF filesystem work goes to ``app/uploads.py``.
 """
 
@@ -135,12 +135,13 @@ def index(
     date_from: Annotated[date | None, Query()] = None,
     date_to: Annotated[date | None, Query()] = None,
 ):
-    """Dashboard (§6).
+    """Server-rendered dashboard page.
 
-    All filters are optional (empty = everything) and reuse the exact S1
-    predicate via repo.list_applications. This same query string later drives
-    both CSV endpoints in S5. HTMX re-renders the whole page through this GET.
-    Malformed dates 422 automatically (FastAPI param validation).
+    All filters are optional (empty = everything) and reuse the same shared
+    predicate as every other widget via repo.list_applications. This exact
+    query string also drives both CSV export endpoints. HTMX re-renders the
+    whole page through this GET. Malformed dates 422 automatically (FastAPI
+    param validation).
     """
     company_value = _clean(company)
     statuses = [value for value in status if value]
@@ -158,7 +159,7 @@ def index(
             date_to=date_to,
         )
         # Same predicate, full event history — feeds the median-days card and
-        # the Sankey payload below (§6 item 5).
+        # the Sankey payload below.
         events = repo.get_status_events_for_filter(
             session,
             company=company_value,
@@ -188,7 +189,7 @@ def index(
     }
 
     # Header export links carry this exact filter query string, so
-    # "Export CSV" / "Export history" download what the dashboard shows (§5).
+    # "Export CSV" / "Export history" download exactly this filtered slice.
     filter_params: list[tuple[str, str]] = []
     if company_value:
         filter_params.append(("company", company_value))
@@ -204,7 +205,7 @@ def index(
         return f"{path}?{filter_query}" if filter_query else path
 
     return templates.TemplateResponse(request, "index.html", {
-        # Dashboard widgets (§6 items 3–4, 7).
+        # Dashboard widgets.
         "today": today,
         "waiting": waiting_rows,
         "stats": stats,
@@ -214,7 +215,7 @@ def index(
         "date_from_str": date_from.isoformat() if date_from else "",
         "date_to_str": date_to.isoformat() if date_to else "",
         "is_filtered": bool(company_value or statuses or date_from or date_to),
-        # Header export links with the active filters (§5).
+        # Header export links carrying the active filters.
         "export_csv_url": _export_url("/api/export.csv"),
         "export_events_url": _export_url("/api/events.csv"),
         # Distinct companies within the current slice, same predicate as every other widget.
@@ -247,7 +248,7 @@ async def create_application(
     application_pdf: UploadFile | None = File(None),
 ):
     """Create an application (always starting at ``received``) and store any
-    uploaded PDFs. Redirects to the new detail page (§5)."""
+    uploaded PDFs. Redirects to the new detail page."""
     errors: dict[str, str] = {}
     company_value = _clean(company)
     job_title_value = _clean(job_title)
@@ -319,7 +320,7 @@ async def create_application(
 @router.get("/applications/{application_id}")
 def application_detail(request: Request, application_id: int):
     """All fields, the inline edit form, the stored-PDF links and the full
-    status timeline from ``status_events`` (§5)."""
+    status timeline from ``status_events``."""
     with open_session() as session:
         application = repo.get_application(session, application_id)
         if application is None:
@@ -347,7 +348,7 @@ async def update_application(
     application_pdf: UploadFile | None = File(None),
 ):
     """Save field edits and/or new PDFs for one application. A status change
-    (and only a real change) appends exactly one ``status_events`` row (§4)."""
+    (and only a real change) appends exactly one ``status_events`` row."""
     with open_session() as session:
         application = repo.get_application(session, application_id)
         if application is None:
@@ -394,7 +395,7 @@ async def update_application(
             )
 
         # Field edits commit first; new PDFs then replace the stored files and
-        # their metadata (§7). If a disk write fails, the previous file is
+        # their metadata. If a disk write fails, the previous file is
         # still intact on disk with its old metadata — no inconsistency.
         repo.update_application(
             session,
@@ -440,10 +441,11 @@ async def update_application(
 
 @router.get("/files/{application_id}/{kind}")
 def download_file(application_id: int, kind: str):
-    """Stream one stored PDF back to the browser (§5).
+    """Stream one stored PDF back to the browser.
 
-    The file is served with its original upload name (kept in the database,
-    §7). Unknown application, unknown kind, or a missing on-disk file all 404.
+    The file is served under its original upload name (stored alongside the
+    application row in the database). Unknown application, unknown kind, or a
+    missing on-disk file all 404.
     """
     if kind not in uploads.KINDS:
         raise HTTPException(status_code=404, detail="File not found")

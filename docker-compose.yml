@@ -4,11 +4,11 @@ services:
     ports:
       - "${PORT:-8090}:8000"
     volumes:
-      # All paths relative to the repo root — identical on WSL (Docker
-      # Desktop) and on the Raspberry Pi (§2, §8).
+      # All paths are relative to the repo root, so this works identically
+      # under WSL / Docker Desktop and on a Raspberry Pi.
       - ./data:/app/data
     restart: unless-stopped
-    # Slim image has no curl, so probe with the Python stdlib (§8).
+    # The slim base image ships no curl, so the healthcheck uses the stdlib.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
       interval: 30s

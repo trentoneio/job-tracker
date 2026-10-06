@@ -1,4 +1,4 @@
-# Multi-arch base so the Raspberry Pi builds/runs native arm64 (§8).
+# Multi-arch base so a Raspberry Pi can build and run it natively (arm64).
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 
 # Container entrypoint: brief root fixup of the bind-mounted data volume,
-# then a permanent drop to the dedicated user (§7, §8).
+# then a permanent drop to the dedicated non-root user.
 COPY entrypoint.py /entrypoint.py
 
 # Dedicated system account for the long-running server process. Nologin shell;
@@ -26,7 +26,7 @@ RUN groupadd -r jobtracker \
 
 EXPOSE 8000
 
-# Slim image has no curl, so probe with the Python stdlib (§8).
+# The slim base image ships no curl, so the healthcheck uses the Python stdlib.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD ["python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
 

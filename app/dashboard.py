@@ -1,8 +1,8 @@
-"""Server-side computations for the dashboard widgets (PLAN.md §6 items 3–4).
+"""Server-side computations for the dashboard widgets.
 
 Pure functions over repository results — no database access in this module, so
 the same code renders the live dashboard and can be tested against fixture
-data. "Today" is always passed in by the caller (UTC date per §7), never read
+data. "Today" is always passed in by the caller (as a UTC date), never read
 here, which keeps these functions deterministic in tests.
 """
 
@@ -12,19 +12,19 @@ from typing import Iterable, Optional
 from app.config import STATUSES, WAITING_STATUSES
 from app.models import Application, StatusEvent
 
-# Terminal = every status in the vocabulary that is not "waiting" (§4/§6:
-# accepted / rejected / ghosted). Derived from config so adding a status later
+# Terminal = every status in the vocabulary that is not "waiting"
+# (accepted / rejected / ghosted). Derived from config so adding a status later
 # only requires deciding which side of the line it falls on.
 TERMINAL_STATUSES = tuple(status for status in STATUSES if status not in WAITING_STATUSES)
 
 
 def days_elapsed(application: Application, today) -> int:
-    """Whole days between ``application.applied_on`` and *today* (§6 item 7)."""
+    """Whole days between ``application.applied_on`` and *today*."""
     return (today - application.applied_on).days
 
 
 def waiting_queue(applications: Iterable[Application], today) -> list[Application]:
-    """Applications in a waiting status, most-elapsed first (§6 item 4).
+    """Applications in a waiting status, most-elapsed first.
 
     Ties break by id so the order is deterministic across renders.
     """
@@ -37,7 +37,7 @@ def first_response_events(events) -> dict[int, StatusEvent]:
 
     *events* must arrive ordered within each application by ``(changed_at, id)``
     — exactly what ``repo.get_status_events_for_filter`` guarantees. The initial
-    creation events have ``from_status NULL`` (§4).
+    creation events have ``from_status NULL``.
     """
     first: dict[int, StatusEvent] = {}
     for event in events:
@@ -54,7 +54,7 @@ def median_days_to_first_response(
 
     Applications that have received no reply yet (still at their initial
     event) are excluded; returns None when nothing in the set has been
-    responded to, which renders as "—" (§6 item 3).
+    responded to, which renders as "—" on the dashboard.
     """
     by_id = {app.id: app for app in applications}
     values = [

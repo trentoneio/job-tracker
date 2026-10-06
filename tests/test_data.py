@@ -1,7 +1,7 @@
-"""Data layer tests: models, repository rules (§4) and the shared filter predicate.
+"""Data layer tests: models, repository rules and the shared filter predicate.
 
 Every fixture builds a throwaway SQLite database under pytest's ``tmp_path`` —
-the real DATA_DIR (and thus any user data) is never touched, per PLAN.md §7.
+the real DATA_DIR (and thus any user data) is never touched.
 """
 
 import time
@@ -134,7 +134,7 @@ def test_check_constraint_rejects_unknown_status_at_database_level(session):
 
 
 # ---------------------------------------------------------------------------
-# status event rules (§4)
+# status event rules
 # ---------------------------------------------------------------------------
 
 def test_status_change_appends_exactly_one_event_with_from_and_to(session):
@@ -160,7 +160,7 @@ def test_status_change_appends_exactly_one_event_with_from_and_to(session):
         ("interviewing", "offer"),
         ("offer", "accepted"),
     ]
-    # applications.status mirrors the latest event (§4 rule)
+    # applications.status mirrors the latest event
     assert updated.status == "accepted" == _events(session, app.id)[-1].to_status
 
 
@@ -180,7 +180,7 @@ def test_non_status_edits_change_no_events_but_bump_updated_at(session):
     time.sleep(0.01)
     old_updated_at = repo.get_application(session, app.id).updated_at
 
-    # None clears a nullable column; omitted keys stay untouched (§4 rule 3)
+    # None clears a nullable column; omitted keys stay untouched
     updated = repo.update_application(
         session, app.id, company="Beta LLC", notes=None
     )
@@ -229,7 +229,7 @@ def test_relationship_exposes_events_in_order(session):
 
 
 # ---------------------------------------------------------------------------
-# shared filter predicate (§5: every parameter optional; empty = all)
+# shared filter predicate (every parameter optional; empty means all)
 # ---------------------------------------------------------------------------
 
 def _seed(session):
@@ -333,7 +333,7 @@ def test_events_for_filter_covers_matching_applications_only(session):
 
 
 # ---------------------------------------------------------------------------
-# engine configuration (§7)
+# engine configuration
 # ---------------------------------------------------------------------------
 
 def test_wal_journal_mode_is_active(engine):

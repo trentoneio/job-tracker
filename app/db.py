@@ -1,4 +1,4 @@
-"""Database engine, session factory and initialization (PLAN.md §7).
+"""Database engine, session factory and initialization.
 
 All runtime state lives in a single SQLite file under DATA_DIR — ``data/app.db``
 for local dev runs, ``/app/data/app.db`` inside the container. Every new
@@ -11,7 +11,7 @@ connection gets:
 
 The engine for the app's own DATA_DIR is created lazily: merely importing this
 module has no disk side effects. Tests instead call :func:`create_db_engine`
-with a temp directory, so pytest never touches the live database (§7).
+with a temp directory, so pytest never touches the live database.
 """
 
 from contextlib import contextmanager
@@ -62,7 +62,7 @@ def make_session_factory(engine: Engine) -> sessionmaker[Session]:
 
     ``expire_on_commit=False`` means objects returned by repository functions
     stay fully readable after the transaction commits (and even after the
-    session closes), which keeps S2/S3 call sites simple.
+    session closes), which keeps the calling layers simple.
     """
     return sessionmaker(bind=engine, expire_on_commit=False)
 
@@ -92,7 +92,7 @@ def open_session() -> Iterator[Session]:
     """Open a session on the default engine.
 
     Repository functions commit their own work; this only owns connection
-    lifetime for the app layer (S2 routes, S3 rendering).
+    lifetime for the request-handling and rendering layers.
     """
     session = get_session_factory()()
     try:

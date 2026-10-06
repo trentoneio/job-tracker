@@ -17,14 +17,15 @@ from app.routes.exports import router as exports_router
 def create_app() -> FastAPI:
     """Build and return the configured app.
 
-    Startup work runs in the lifespan below; static assets (vendored HTMX,
-    S3) are mounted at /static at the bottom of this function.
+    Startup work runs in the lifespan below; static assets (the vendored
+    HTMX and ECharts files) are mounted at /static at the bottom of this
+    function.
     """
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         # Ensure the SQLite database (and its data directory) exists before
-        # serving any request (§7); idempotent across restarts.
+        # serving any request; idempotent across restarts.
         init_db()
         # Applications that sat at "received" for more than GHOST_AFTER_DAYS
         # without an update are ghosted once here, and again on every
@@ -41,14 +42,14 @@ def create_app() -> FastAPI:
         return {"status": "ok", "service": "job-tracker"}
 
     # Dashboard assets, served from disk — no CDN or runtime internet
-    # dependency (§3 LAN-only hosting).
+    # dependency (the app is built for LAN-only hosting, no CDN fetches).
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.include_router(applications_router)
     app.include_router(exports_router)
 
-    # Friendly HTML 404 page for unknown application/file ids and routes
-    # (S5 polish); any other status code keeps the default JSON shape.
+    # Friendly HTML 404 page for unknown application/file ids and routes;
+    # any other status code keeps the default JSON shape.
     templates = Jinja2Templates(
         directory=str(Path(__file__).resolve().parent / "templates")
     )

@@ -1,5 +1,5 @@
 #!/bin/sh
-# job-tracker commit-message standard (PLAN.md §10), machine-enforced: the
+# job-tracker commit-message standard, machine-enforced: the
 # change type goes at the END of every commit message — the last non-blank
 # line must be exactly one of
 #   Type: feature | fix | refactor | docs | chore | test | perf
@@ -20,7 +20,7 @@ case $last_line in
     ;;
 esac
 
-echo "Commit message rejected (PLAN.md §10): the last non-blank line must be exactly one of" >&2
+echo "Commit message rejected: the last non-blank line must be exactly one of" >&2
 echo "  Type: feature | fix | refactor | docs | chore | test | perf" >&2
-echo "(the change type goes at the END of the message, after a blank line — see git log 9c10ca9)" >&2
+echo "(the change type goes at the END of the message, after a blank line — see git log)" >&2
 exit 1
