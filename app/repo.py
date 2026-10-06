@@ -13,7 +13,7 @@ Conventions:
 """
 
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, datetime, time, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -194,7 +194,11 @@ _UPDATABLE_FIELDS = frozenset({
 
 
 def update_application(
-    session: Session, application_id: int, **fields: Any
+    session: Session,
+    application_id: int,
+    *,
+    status_changed_on: date | None = None,
+    **fields: Any,
 ) -> Optional[Application]:
     """Apply field edits to an existing application.
 
@@ -203,6 +207,10 @@ def update_application(
     * If ``status`` is provided and differs from the current value, exactly one
       event (old → new) is appended and ``applications.status`` mirrors it.
       Setting the same status appends nothing (§4).
+    * ``status_changed_on`` optionally backdates that event's timestamp: a
+      calendar day becomes midnight UTC on that date. It only applies when a
+      real status change happens; otherwise (and with no value) events are
+      stamped with the current time.
     * ``updated_at`` is always bumped, even for non-status edits or no-ops.
 
     Returns the updated application, or ``None`` if the id does not exist.
@@ -219,6 +227,19 @@ def update_application(
         raise ValueError(
             f"unknown status {new_status!r}; expected one of {', '.join(STATUSES)}"
         )
+
+    # Explicit event timestamp: a day becomes midnight UTC; a full datetime is
+    # used as given. Anything else is a caller bug, not user input.
+    if type(status_changed_on) is date:
+        status_time = datetime.combine(
+            status_changed_on, time.min, tzinfo=timezone.utc
+        )
+    elif isinstance(status_changed_on, datetime):
+        status_time = status_changed_on
+    elif status_changed_on is None:
+        status_time = None
+    else:
+        raise TypeError("status_changed_on must be a date, a datetime or None")
 
     application = session.get(Application, application_id)
     if application is None:
@@ -240,13 +261,16 @@ def update_application(
         application.status = new_status
 
     if status_changed:
-        session.add(
-            StatusEvent(
-                application_id=application.id,
-                from_status=previous_status,
-                to_status=new_status,
-            )
+        event = StatusEvent(
+            application_id=application.id,
+            from_status=previous_status,
+            to_status=new_status,
         )
+        # Only set changed_at when an explicit timestamp was given: passing
+        # None explicitly would bind NULL and bypass the column default.
+        if status_time is not None:
+            event.changed_at = status_time
+        session.add(event)
 
     application.updated_at = utc_now()
     session.commit()

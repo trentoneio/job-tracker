@@ -11,7 +11,7 @@ Layering follows §4: request handlers only call repo functions through
 """
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Annotated, Optional
 from urllib.parse import urlencode
@@ -49,6 +49,30 @@ def _parse_applied_on(raw: str, errors: dict[str, str]) -> date | None:
     except ValueError:
         errors["applied_on"] = f"{text} is not a valid date (expected YYYY-MM-DD)."
         return None
+
+
+def _parse_status_date(raw: str, errors: dict[str, str]) -> date | None:
+    """Parse the optional status-change-date field.
+
+    Blank means "use today" (no error). Invalid formats and future dates are
+    reported in ``errors``; backdating is allowed so a change remembered days
+    later can be recorded on when it actually happened.
+    """
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        parsed = date.fromisoformat(text)
+    except ValueError:
+        errors["status_changed_on"] = (
+            f"{text} is not a valid date (expected YYYY-MM-DD)."
+        )
+        return None
+    today = datetime.now(timezone.utc).date()
+    if parsed > today:
+        errors["status_changed_on"] = "The status change date cannot be in the future."
+        return None
+    return parsed
 
 
 async def _collect_file_parts(
@@ -312,6 +336,7 @@ async def update_application(
     reference_number: str = Form(""),
     applied_on: str = Form(""),
     status: str = Form(""),
+    status_changed_on: str = Form(""),
     job_posting_url: str = Form(""),
     notes: str = Form(""),
     resume_pdf: UploadFile | None = File(None),
@@ -335,6 +360,7 @@ async def update_application(
         status_value = _clean(status) or ""
         if status_value not in config.STATUSES:
             errors["status"] = f"Status must be one of {', '.join(config.STATUSES)}."
+        change_date = _parse_status_date(status_changed_on, errors)
 
         values = {
             "company": company_value or "",
@@ -342,6 +368,7 @@ async def update_application(
             "reference_number": _clean(reference_number) or "",
             "applied_on": applied_on.strip(),
             "status": status,
+            "status_changed_on": (status_changed_on or "").strip(),
             "job_posting_url": _clean(job_posting_url) or "",
             "notes": (notes or "").strip(),
         }
@@ -373,6 +400,9 @@ async def update_application(
             reference_number=_clean(reference_number),
             applied_on=applied_date,
             status=status_value,
+            # Backdates the appended event when a real change is made; ignored
+            # otherwise (the repo layer applies it only on actual transitions).
+            status_changed_on=change_date,
             job_posting_url=_clean(job_posting_url),
             notes=_clean(notes),
         )

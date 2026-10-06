@@ -73,6 +73,14 @@
           {% if errors.status %}<p class="field-error">{{ errors.status }}</p>{% endif %}
         </div>
 
+        <div>
+          <label for="status_changed_on">Status change date</label>
+          <input id="status_changed_on" name="status_changed_on" type="date"
+                 value="{{ values.get('status_changed_on', '') }}">
+          {% if errors.status_changed_on %}<p class="field-error">{{ errors.status_changed_on }}</p>{% endif %}
+          <p class="hint">When the change happened. Leave blank for today; backdating is allowed, future dates are not.</p>
+        </div>
+
         <div class="form-full">
           <label for="job_posting_url">Job posting URL</label>
           <input id="job_posting_url" name="job_posting_url" type="url" value="{{ values.get('job_posting_url', application.job_posting_url or '') }}">
